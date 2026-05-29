@@ -3,61 +3,353 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>snowcrystal playground</title>
+    <title>snowcrystal — 中谷ダイアグラム探索 / Nakaya Diagram Explorer</title>
     <style>
+      :root {
+        --bg: #141821;
+        --panel: rgba(22, 27, 38, 0.72);
+        --panel-border: rgba(255, 255, 255, 0.08);
+        --text: #e8ecf4;
+        --muted: #9aa6bd;
+        --accent: #7fb4ff;
+        --marker: #ff6b6b;
+        --radius: 14px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
       html,
       body {
         margin: 0;
         height: 100%;
-        background: #111;
-        color: #eee;
-        font-family: sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
         overflow: hidden;
+        -webkit-font-smoothing: antialiased;
       }
-      #ui {
+
+      #app {
         position: fixed;
-        top: 12px;
-        left: 12px;
+        inset: 0;
+      }
+
+      /* 3D canvas fills the screen; panels float above it. */
+      canvas#scene {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .panel {
+        position: fixed;
+        background: var(--panel);
+        border: 1px solid var(--panel-border);
+        border-radius: var(--radius);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        padding: 16px 18px;
         z-index: 10;
-        background: rgba(0, 0, 0, 0.55);
-        padding: 10px 12px;
-        border-radius: 8px;
-        font-size: 13px;
-        line-height: 1.8;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
       }
-      select,
-      input {
-        margin-left: 6px;
+
+      /* ── top-left: inputs ── */
+      #controls {
+        top: 16px;
+        left: 16px;
+        width: 280px;
       }
-      .note {
-        opacity: 0.7;
+
+      .panel h1 {
+        margin: 0 0 2px;
+        font-size: 15px;
+        font-weight: 650;
+        letter-spacing: 0.01em;
+      }
+
+      .panel .sub {
+        margin: 0 0 14px;
         font-size: 11px;
-        max-width: 260px;
+        color: var(--muted);
+      }
+
+      .field {
+        margin: 14px 0 0;
+      }
+
+      .field-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 6px;
+      }
+
+      .field label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .field .value {
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--accent);
+        cursor: pointer;
+      }
+
+      .divider {
+        height: 1px;
+        background: var(--panel-border);
+        margin: 16px 0 0;
+      }
+
+      .select-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .select-row label {
+        font-size: 12px;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+
+      select {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 6px 8px;
+        font-size: 12px;
+        font-family: inherit;
+      }
+
+      .seed-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .seed-row label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      input[type="number"] {
+        width: 72px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        border: 1px solid var(--panel-border);
+        border-radius: 8px;
+        padding: 5px 7px;
+        font-size: 12px;
+        font-family: inherit;
+      }
+
+      .mode-tag {
+        display: inline-block;
+        margin-top: 12px;
+        font-size: 10.5px;
+        color: var(--muted);
+        opacity: 0.85;
+      }
+
+      /* ── top-right: live morphology / classification ── */
+      #info {
+        top: 16px;
+        right: 16px;
+        width: 248px;
+        text-align: right;
+      }
+
+      #info .morph-ja {
+        font-size: 26px;
+        font-weight: 680;
+        line-height: 1.15;
+      }
+
+      #info .morph-en {
+        font-size: 13px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+
+      #info .code {
+        font-size: 40px;
+        font-weight: 720;
+        color: var(--accent);
+        letter-spacing: 0.02em;
+        margin: 10px 0 2px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      #info .code-label {
+        font-size: 10.5px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      #hierarchy {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--panel-border);
+        font-size: 11px;
+        line-height: 1.7;
+        color: var(--muted);
+        text-align: right;
+      }
+
+      #hierarchy .cur {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      /* ── bottom-left: Nakaya diagram ── */
+      #diagram {
+        bottom: 16px;
+        left: 16px;
+        padding: 14px 14px 10px;
+      }
+
+      #diagram .diagram-title {
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 8px;
+        letter-spacing: 0.02em;
+      }
+
+      canvas#nakaya {
+        display: block;
+        border-radius: 8px;
+      }
+
+      .footnote {
+        position: fixed;
+        bottom: 14px;
+        right: 18px;
+        z-index: 10;
+        font-size: 10.5px;
+        color: var(--muted);
+        opacity: 0.7;
+        text-align: right;
+        max-width: 300px;
+        line-height: 1.5;
+      }
+
+      .footnote a {
+        color: var(--muted);
+      }
+
+      /* ── responsive: stack/shrink so nothing leaves the screen ── */
+      @media (max-width: 760px) {
+        #controls {
+          width: calc(100vw - 32px);
+        }
+        #info {
+          top: auto;
+          bottom: 16px;
+          right: 16px;
+          width: 180px;
+        }
+        #info .code {
+          font-size: 30px;
+        }
+        #info .morph-ja {
+          font-size: 20px;
+        }
+        #diagram {
+          display: none; /* keep the small screen uncluttered */
+        }
+        .footnote {
+          display: none;
+        }
       }
     </style>
   </head>
   <body>
-    <div id="ui">
-      <div>
-        morphology
-        <select id="morphology">
-          <option value="樹枝状">樹枝状 / Dendrite</option>
-          <option value="扇形">扇形 / Sector</option>
-          <option value="角板">角板 / Plate</option>
-          <option value="厚角板">厚角板 / Thick Plate</option>
-          <option value="骸晶角板">骸晶角板 / Skeleton Plate</option>
-          <option value="角柱">角柱 / Column</option>
-          <option value="骸晶角柱">骸晶角柱 / Skeleton Column</option>
-          <option value="針">針 / Needle</option>
-          <option value="さや">さや / Sheath</option>
-        </select>
-      </div>
-      <div>seed <input id="seed" type="number" value="1" style="width: 64px" /></div>
-      <div class="note">
-        A morphological visualization (Nakaya diagram / global classification),
-        not a physical growth model.
+    <div id="app">
+      <canvas id="scene"></canvas>
+
+      <!-- inputs -->
+      <section class="panel" id="controls">
+        <h1>中谷ダイアグラム探索</h1>
+        <p class="sub">Nakaya Diagram Explorer · snowcrystal</p>
+
+        <div class="field">
+          <div class="field-row">
+            <label for="temp">気温 / Temperature</label>
+            <span class="value" id="temp-val">−15.0 ℃</span>
+          </div>
+          <input type="range" id="temp" min="0" max="40" step="0.5" value="15" />
+        </div>
+
+        <div class="field">
+          <div class="field-row">
+            <label for="vapor">水蒸気量 / Supersaturation</label>
+            <span class="value" id="vapor-val">0.250</span>
+          </div>
+          <input type="range" id="vapor" min="0" max="0.3" step="0.001" value="0.25" />
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="select-row">
+          <label for="morphology">形態を直接選択</label>
+          <select id="morphology">
+            <option value="">（スライダー連動）</option>
+            <option value="樹枝状">樹枝状 / Dendrite</option>
+            <option value="扇形">扇形 / Sector</option>
+            <option value="角板">角板 / Plate</option>
+            <option value="厚角板">厚角板 / Thick Plate</option>
+            <option value="骸晶角板">骸晶角板 / Skeleton Plate</option>
+            <option value="角柱">角柱 / Column</option>
+            <option value="骸晶角柱">骸晶角柱 / Skeleton Column</option>
+            <option value="針">針 / Needle</option>
+            <option value="さや">さや / Sheath</option>
+          </select>
+        </div>
+
+        <div class="seed-row">
+          <label for="seed">seed</label>
+          <input id="seed" type="number" value="1" />
+        </div>
+
+        <span class="mode-tag" id="mode-tag">入力: 気温・水蒸気量（スライダー連動）</span>
+      </section>
+
+      <!-- live morphology / classification -->
+      <section class="panel" id="info">
+        <div class="morph-ja" id="morph-ja">樹枝状</div>
+        <div class="morph-en" id="morph-en">Dendrite</div>
+        <div class="code" id="global-code">P4g</div>
+        <div class="code-label">Global Classification</div>
+        <div id="hierarchy"></div>
+      </section>
+
+      <!-- 2D Nakaya diagram -->
+      <section class="panel" id="diagram">
+        <div class="diagram-title">気温 × 水蒸気量 / Nakaya diagram</div>
+        <canvas id="nakaya" width="300" height="220"></canvas>
+      </section>
+
+      <div class="footnote">
+        形態の可視化（物理モデルではない）· A morphological visualization.<br />
+        出典 / Source:
+        <a href="https://snownotes.org/elsewhere/snow-crystal-3d-seppyo/">雪氷 88巻3号 / SEPPYO Vol.88 No.3</a>
       </div>
     </div>
+
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
