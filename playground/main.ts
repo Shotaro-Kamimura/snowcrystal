@@ -93,7 +93,6 @@ const vaporSlider = document.getElementById('vapor') as HTMLInputElement;
 const tempVal = document.getElementById('temp-val') as HTMLElement;
 const vaporVal = document.getElementById('vapor-val') as HTMLElement;
 const morphologySelect = document.getElementById('morphology') as HTMLSelectElement;
-const seedInput = document.getElementById('seed') as HTMLInputElement;
 const modeTag = document.getElementById('mode-tag') as HTMLElement;
 
 const morphJa = document.getElementById('morph-ja') as HTMLElement;
@@ -119,24 +118,21 @@ function readTemp(): number {
 function readVapor(): number {
   return parseFloat(vaporSlider.value);
 }
-function readSeed(): number {
-  return Number(seedInput.value) || 0;
-}
 
 // ─────────────────────────────────────────────────────────────────────────
 // Build / rebuild the crystal (always dispose the previous group first)
 // ─────────────────────────────────────────────────────────────────────────
 function rebuild(): void {
-  const seed = readSeed();
-
+  // No seed param: the library defaults to a fixed seed, so output stays
+  // deterministic without exposing a seed control in the UI.
   if (mode === 'manual' && morphologySelect.value) {
     currentMorph = morphologySelect.value as Morphology;
-    swap(createSnowCrystal({ morphology: currentMorph, seed }));
+    swap(createSnowCrystal({ morphology: currentMorph }));
   } else {
     const temp = readTemp();
     const vapor = readVapor();
     currentMorph = getCrystalType(temp, vapor);
-    swap(createSnowCrystal({ temperature: temp, supersaturation: vapor, seed }));
+    swap(createSnowCrystal({ temperature: temp, supersaturation: vapor }));
   }
 
   updateInfo();
@@ -316,8 +312,6 @@ morphologySelect.addEventListener('change', () => {
   }
   rebuild();
 });
-
-seedInput.addEventListener('input', rebuild);
 
 // ─────────────────────────────────────────────────────────────────────────
 // Resize
