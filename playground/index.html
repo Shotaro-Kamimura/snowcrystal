@@ -23,12 +23,20 @@
       html,
       body {
         margin: 0;
-        height: 100%;
         background: var(--bg);
         color: var(--text);
         font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
-        overflow: hidden;
         -webkit-font-smoothing: antialiased;
+      }
+
+      /* ───────────────────────────────────────────────────────────────
+         DESKTOP (default, ≥769px): canvas full-screen, panels at corners.
+         body does not scroll.
+         ─────────────────────────────────────────────────────────────── */
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
       }
 
       #app {
@@ -36,11 +44,14 @@
         inset: 0;
       }
 
-      /* 3D canvas fills the screen; panels float above it. */
+      /* 3D canvas fills the viewport behind the floating panels. */
       canvas#scene {
+        position: fixed;
+        inset: 0;
         display: block;
         width: 100%;
         height: 100%;
+        z-index: 0;
       }
 
       .panel {
@@ -55,7 +66,6 @@
         box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
       }
 
-      /* ── top-left: inputs ── */
       #controls {
         top: 16px;
         left: 16px;
@@ -164,7 +174,6 @@
         opacity: 0.85;
       }
 
-      /* ── top-right: live morphology / classification ── */
       #info {
         top: 16px;
         right: 16px;
@@ -215,7 +224,6 @@
         font-weight: 600;
       }
 
-      /* ── bottom-left: Nakaya diagram ── */
       #diagram {
         bottom: 16px;
         left: 16px;
@@ -232,9 +240,11 @@
       canvas#nakaya {
         display: block;
         border-radius: 8px;
+        width: 300px;
+        height: 220px;
       }
 
-      .footnote {
+      #footnote {
         position: fixed;
         bottom: 14px;
         right: 18px;
@@ -245,42 +255,96 @@
         text-align: right;
         max-width: 300px;
         line-height: 1.5;
+        background: none;
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
       }
 
-      .footnote a {
+      #footnote a {
         color: var(--muted);
       }
 
-      /* ── responsive: stack/shrink so nothing leaves the screen ── */
-      @media (max-width: 760px) {
-        #controls {
-          width: calc(100vw - 32px);
+      /* ───────────────────────────────────────────────────────────────
+         MOBILE (≤768px): single scrollable column.
+         DOM order is controls → scene → info → diagram → footnote,
+         which becomes the vertical stack order here.
+         ─────────────────────────────────────────────────────────────── */
+      @media (max-width: 768px) {
+        html,
+        body {
+          height: auto;
+          overflow-y: auto;
+          overflow-x: hidden;
         }
+
+        #app {
+          position: static;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          padding: 12px;
+          min-height: 100%;
+        }
+
+        /* Panels drop out of fixed positioning into normal flow. */
+        .panel {
+          position: static;
+          width: 100%;
+          inset: auto;
+          text-align: left;
+        }
+
+        #controls,
         #info {
-          top: auto;
-          bottom: 16px;
-          right: 16px;
-          width: 180px;
+          width: 100%;
         }
+
+        /* 3D becomes a bounded block, not a full-screen layer. */
+        canvas#scene {
+          position: static;
+          inset: auto;
+          width: 100%;
+          height: 56vh;
+          min-height: 320px;
+          border-radius: var(--radius);
+          z-index: 0;
+        }
+
+        #info {
+          text-align: left;
+        }
+
         #info .code {
-          font-size: 30px;
+          font-size: 34px;
         }
-        #info .morph-ja {
-          font-size: 20px;
+
+        #hierarchy {
+          text-align: left;
         }
-        #diagram {
-          display: none; /* keep the small screen uncluttered */
+
+        canvas#nakaya {
+          width: 100%;
+          height: auto;
         }
-        .footnote {
-          display: none;
+
+        #footnote {
+          position: static;
+          width: 100%;
+          max-width: none;
+          text-align: left;
+          opacity: 0.8;
+          padding: 0 4px 8px;
         }
       }
     </style>
   </head>
   <body>
+    <!-- DOM order = mobile stack order: controls → 3D → info → diagram → footnote.
+         On desktop everything is fixed-positioned so order is irrelevant. -->
     <div id="app">
-      <canvas id="scene"></canvas>
-
       <!-- inputs -->
       <section class="panel" id="controls">
         <h1>中谷ダイアグラム探索</h1>
@@ -328,6 +392,9 @@
         <span class="mode-tag" id="mode-tag">入力: 気温・水蒸気量（スライダー連動）</span>
       </section>
 
+      <!-- 3D view -->
+      <canvas id="scene"></canvas>
+
       <!-- live morphology / classification -->
       <section class="panel" id="info">
         <div class="morph-ja" id="morph-ja">樹枝状</div>
@@ -343,7 +410,8 @@
         <canvas id="nakaya" width="300" height="220"></canvas>
       </section>
 
-      <div class="footnote">
+      <!-- source -->
+      <div id="footnote">
         形態の可視化（物理モデルではない）· A morphological visualization.<br />
         出典 / Source:
         <a href="https://snownotes.org/elsewhere/snow-crystal-3d-seppyo/">雪氷 88巻3号 / SEPPYO Vol.88 No.3</a>

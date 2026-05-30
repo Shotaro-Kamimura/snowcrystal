@@ -58,8 +58,9 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.set(4.2, 3.0, 6.2);
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// Size is driven by the canvas element's own box (see resizeToCanvas), not the
+// window — so the layout (full-screen on desktop, 56vh block on mobile) controls it.
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -321,11 +322,20 @@ seedInput.addEventListener('input', rebuild);
 // ─────────────────────────────────────────────────────────────────────────
 // Resize
 // ─────────────────────────────────────────────────────────────────────────
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+// Follow the canvas element's actual rendered size (its CSS box), not the window.
+// updateStyle=false: CSS owns the display size; we only set the drawing buffer.
+function resizeToCanvas(): void {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (w === 0 || h === 0) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+}
+
+const ro = new ResizeObserver(resizeToCanvas);
+ro.observe(canvas);
+window.addEventListener('resize', resizeToCanvas);
 
 // ─────────────────────────────────────────────────────────────────────────
 // Render loop
@@ -336,5 +346,6 @@ function animate(): void {
   renderer.render(scene, camera);
 }
 
+resizeToCanvas();
 rebuild();
 animate();
