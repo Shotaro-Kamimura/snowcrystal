@@ -1,6 +1,6 @@
 {
   "name": "snowcrystal",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Visualize snow crystal morphology (Nakaya diagram + Global Classification of 121 types) as Three.js geometry. A morphological visualization, not a physical growth model.",
   "type": "module",
   "license": "MIT",
@@ -15,6 +15,14 @@
     "visualization",
     "geometry"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shotaro-Kamimura/snowcrystal.git"
+  },
+  "homepage": "https://github.com/Shotaro-Kamimura/snowcrystal#readme",
+  "bugs": {
+    "url": "https://github.com/Shotaro-Kamimura/snowcrystal/issues"
+  },
   "sideEffects": false,
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -28,7 +36,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "dev": "vite",
