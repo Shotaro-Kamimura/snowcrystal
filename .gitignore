@@ -2,3 +2,9 @@ node_modules
 dist
 *.log
 .DS_Store
+
+# Claude Code local settings & environment-specific files.
+# NOTE: .claude/settings.json and .claude/agents/*.md are already tracked;
+# this ignore only stops NEW files (e.g. scheduled_tasks.lock). To fully
+# un-publish the already-committed ones, run:  git rm -r --cached .claude
+.claude/
