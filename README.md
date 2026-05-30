@@ -100,16 +100,17 @@ A minimal Three.js viewer with a morphology selector and `OrbitControls`.
 
 ## Sources / 出典
 
-- 雪氷 88巻3号 ISSN 0373-1006 p215-217 —
-  <https://snownotes.org/elsewhere/snow-crystal-3d-seppyo/>
-- SEPPYO Vol.88, No.3 ISSN 0373-1006 p215-217 —
-  <https://snownotes.org/en/elsewhere/snow-crystal-3d-seppyo/>
-- グローバル分類（121種）/ Global Classification —
-  <https://snownotes.org/snow-crystals/>
-- 菊地勝弘・亀田貴雄・樋口敬二・山下晃ほか（2012）: 中緯度と極域での観測に基づいた
-  新しい雪結晶の分類 ― グローバル分類 I. *雪氷*, **74**(3), 223–241.
-- Kobayashi, T. (1960) Experimental researches on the snow crystal habit and
-  growth using a convection-mixing chamber. *J. Meteorol. Soc. Japan*, **38**, 231–238.
+- Nakaya, U. (1955): Snow Crystals and Aerosols. Journal of the Faculty of Science, Hokkaido University, Japan, Ser. II, 4(6), 341–354.
+- Kobayashi, T. (1960): Experimental researches on the snow crystal habit and growth using a convection-mixing chamber. J. Meteorol. Soc. Japan, 38, 231–238.
+- 菊地勝弘・亀田貴雄・樋口敬二・山下 晃・雪結晶の新しい分類表を作る会メンバー (2012): 中緯度と極域での観測に基づいた新しい雪結晶の分類 ─グローバル分類─. 雪氷, 74(3), 223–241.
+- Kikuchi, K., Kameda, T., Higuchi, K. & Yamashita, A. (2013): A global classification of snow crystals, ice crystals, and solid precipitation based on observations from middle latitudes to polar regions. Atmospheric Research, 132, 460–472. doi:10.1016/j.atmosres.2013.06.006
+
+## Related / 関連
+
+This package ports the geometry from the SnowNotes "3D Visualization of Snow Crystals" web tool, which is introduced in:
+
+- 上村祥太郎 (2026)「インタラクティブな可視化ツールを用いた『雪結晶 3D ビジュアル』の紹介」（談話室）雪氷, 88(3), 215–217. ISSN 0373-1006. https://snownotes.org/elsewhere/snow-crystal-3d-seppyo/
+- Kamimura, S. (2026): Introduction to "3D Visualization of Snow Crystals," an interactive visualization tool (Note). Seppyo, 88(3), 215–217. ISSN 0373-1006. https://snownotes.org/en/elsewhere/snow-crystal-3d-seppyo/
 
 ## License
 

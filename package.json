@@ -1,6 +1,6 @@
 {
   "name": "snowcrystal",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Visualize snow crystal morphology (Nakaya diagram + Global Classification of 121 types) as Three.js geometry. A morphological visualization, not a physical growth model.",
   "type": "module",
   "license": "MIT",
