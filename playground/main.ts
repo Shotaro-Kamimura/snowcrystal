@@ -1,3 +1,6 @@
+// 成長パスモード(Phase 3a)は growth モジュールを ../src/growth/ への深い import で
+// 使用する — 3a 暫定・0.3.0 で公開面へ(設計書 §6)。src/index.ts には追加しない
+// (公開 API 面 = README の不変条件を維持。npm 利用者からは exports "." により不可視)。
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {
@@ -9,7 +12,10 @@ import {
   waterSaturationExcessDensity,
   ML66,
   type Morphology,
+  type RegionHit,
 } from '../src/index';
+import { renderGrowthPath } from '../src/growth/renderGrowthPath'; // 3a 暫定(深い import、冒頭コメント参照)
+import type { GrowthStage, PathHit } from '../src/growth/types'; // 3a 暫定(同上)
 
 // ─────────────────────────────────────────────────────────────────────────
 // Display-only data tables.
@@ -42,6 +48,10 @@ const HIERARCHY: Record<string, string[]> = {
   P4f: ['P — 板状結晶群 / Plane group', 'P4 — 複合板状結晶 / Composite plate', 'P4f — 扇付角板 / Plate with sectors'],
   P4g: ['P — 板状結晶群 / Plane group', 'P4 — 複合板状結晶 / Composite plate', 'P4g — 樹枝付角板 / Plate with dendrites'],
 };
+
+// 成長パスモードのステージ色(設計書 §5 のモック配色)。図上の点・矢印、冠柱の
+// 柱(①)/ キャップ(②)塗り分け、情報パネルの行マーカーに共通で使う。
+const STAGE_COLORS = ['#5DCAA5', '#85B7EB'] as const;
 
 // ─────────────────────────────────────────────────────────────────────────
 // Scene / renderer (all visual styling lives here in the playground)
@@ -99,12 +109,18 @@ const tempVal = document.getElementById('temp-val') as HTMLElement;
 const vaporVal = document.getElementById('vapor-val') as HTMLElement;
 const morphologySelect = document.getElementById('morphology') as HTMLSelectElement;
 const modeTag = document.getElementById('mode-tag') as HTMLElement;
+const modeSwitch = document.getElementById('mode-switch') as HTMLElement;
+const modeButtons = Array.from(modeSwitch.querySelectorAll('button'));
 
 const morphJa = document.getElementById('morph-ja') as HTMLElement;
 const morphEn = document.getElementById('morph-en') as HTMLElement;
 const globalCode = document.getElementById('global-code') as HTMLElement;
 const hierarchyEl = document.getElementById('hierarchy') as HTMLElement;
 const regionLine = document.getElementById('region-line') as HTMLElement;
+const pathInfo = document.getElementById('path-info') as HTMLElement;
+const pathStage1El = document.getElementById('path-stage-1') as HTMLElement;
+const pathStage2El = document.getElementById('path-stage-2') as HTMLElement;
+const pathCompositeEl = document.getElementById('path-composite') as HTMLElement;
 
 const nakaya = document.getElementById('nakaya') as HTMLCanvasElement;
 const nctx = nakaya.getContext('2d') as CanvasRenderingContext2D;
@@ -112,10 +128,16 @@ const nctx = nakaya.getContext('2d') as CanvasRenderingContext2D;
 // ─────────────────────────────────────────────────────────────────────────
 // State
 // ─────────────────────────────────────────────────────────────────────────
-type Mode = 'climate' | 'manual';
+type Mode = 'climate' | 'manual' | 'path';
 let mode: Mode = 'climate';
 let current: THREE.Group | null = null;
 let currentMorph: Morphology = '樹枝状';
+
+// 成長パスモードの状態。モードを離れても点は保持し、復帰時に復元する。
+// stages[0] = ステージ①(中心部)/ stages[1] = ステージ②(外周)。
+const pathStages: [GrowthStage | null, GrowthStage | null] = [null, null];
+let selectedStage: 0 | 1 = 0; // スライダー 2 本が束ねられる「選択中ステージ」
+let draggingStage: 0 | 1 | null = null;
 
 /** Slider is 0..40 (positive); temperature is the negative of that. */
 function readTemp(): number {
@@ -131,7 +153,18 @@ function readVapor(): number {
 function rebuild(): void {
   // No seed param: the library defaults to a fixed seed, so output stays
   // deterministic without exposing a seed control in the UI.
-  if (mode === 'manual' && morphologySelect.value) {
+  if (mode === 'path') {
+    const [s0, s1] = pathStages;
+    if (s0 && s1) {
+      const group = renderGrowthPath([s0, s1]);
+      paintGrowthParts(group);
+      swap(group);
+    } else if (s0) {
+      // ① のみ設置: 単一条件として描画(無着色)。② の設置でパス描画へ切替
+      swap(createSnowCrystal({ temperature: s0.temperature, supersaturation: s0.supersaturation }));
+    }
+    // 点が未設置の間は直前の結晶を保持する
+  } else if (mode === 'manual' && morphologySelect.value) {
     currentMorph = morphologySelect.value as Morphology;
     swap(createSnowCrystal({ morphology: currentMorph }));
   } else {
@@ -143,6 +176,23 @@ function rebuild(): void {
 
   updateInfo();
   drawNakaya();
+}
+
+/**
+ * 冠柱(CP1a)のみ userData.part で柱 = ①色 / キャップ = ②色に上書きする
+ * (マテリアルは CP-P3-2 で Mesh ごとに個別インスタンス化済み)。
+ * 委譲描画(複合なし・classification-only)は無着色 = 既定マテリアルのまま。
+ */
+function paintGrowthParts(group: THREE.Group): void {
+  const hit = group.userData.pathHit as PathHit;
+  if (hit.composite?.morphology !== '冠柱') return;
+  group.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    const part = obj.userData.part as 'column' | 'cap' | undefined;
+    if (!part) return;
+    const material = obj.material as THREE.MeshStandardMaterial;
+    material.color.set(part === 'column' ? STAGE_COLORS[0] : STAGE_COLORS[1]);
+  });
 }
 
 function swap(next: THREE.Group): void {
@@ -157,21 +207,29 @@ function swap(next: THREE.Group): void {
 // ─────────────────────────────────────────────────────────────────────────
 // Info panel
 // ─────────────────────────────────────────────────────────────────────────
+function renderHierarchy(lines: string[]): void {
+  hierarchyEl.innerHTML = lines
+    .map((line, i) => (i === lines.length - 1 ? `<div class="cur">${line}</div>` : `<div>${line}</div>`))
+    .join('');
+}
+
 function updateInfo(): void {
+  tempVal.textContent = `−${parseFloat(tempSlider.value).toFixed(1)} ℃`;
+  vaporVal.textContent = readVapor().toFixed(3);
+
+  if (mode === 'path') {
+    updatePathInfo();
+    return;
+  }
+  pathInfo.style.display = 'none';
+
   const label = LABELS[currentMorph];
   morphJa.textContent = label.ja;
   morphEn.textContent = label.en;
 
   const code = getGlobalLabel(currentMorph);
   globalCode.textContent = code || '—';
-
-  const lines = HIERARCHY[code] ?? [];
-  hierarchyEl.innerHTML = lines
-    .map((line, i) => (i === lines.length - 1 ? `<div class="cur">${line}</div>` : `<div>${line}</div>`))
-    .join('');
-
-  tempVal.textContent = `−${parseFloat(tempSlider.value).toFixed(1)} ℃`;
-  vaporVal.textContent = readVapor().toFixed(3);
+  renderHierarchy(HIERARCHY[code] ?? []);
 
   modeTag.textContent =
     mode === 'manual'
@@ -186,6 +244,63 @@ function updateInfo(): void {
   } else {
     regionLine.textContent = '';
     regionLine.style.display = 'none';
+  }
+}
+
+/** ステージ行: 図と同じ記号(① ○ / ② ●)+ 従来の形態 / Region 表示。 */
+function stageRowHtml(idx: 0 | 1, hit: RegionHit | null): string {
+  const num = idx === 0 ? '①' : '②';
+  const sym = idx === 0 ? '○' : '●';
+  const mark = `<span class="mark" style="color: ${STAGE_COLORS[idx]}">${sym}</span> ${num} `;
+  if (!hit) return `${mark}—（図をクリックで設定）`;
+  const label = LABELS[hit.morphology];
+  return `${mark}${label.ja} / ${label.en} — ${hit.region.labelJa} (${hit.mlCode ?? '—'})`;
+}
+
+function updatePathInfo(): void {
+  pathInfo.style.display = '';
+  regionLine.textContent = '';
+  regionLine.style.display = 'none';
+  modeTag.textContent = '入力: 成長パス（図をクリック ①→②・ドラッグで移動）';
+
+  const [s0, s1] = pathStages;
+  // 両点あり: renderGrowthPath が group.userData.pathHit に格納した分類を流用
+  const pathHit = s0 && s1 ? ((current?.userData.pathHit as PathHit | undefined) ?? null) : null;
+  const h0 =
+    pathHit?.stages[0] ?? (s0 ? classifyOnDiagram(s0.temperature, s0.supersaturation, ML66) : null);
+  const h1 =
+    pathHit?.stages[1] ?? (s1 ? classifyOnDiagram(s1.temperature, s1.supersaturation, ML66) : null);
+
+  pathStage1El.innerHTML = stageRowHtml(0, h0);
+  pathStage2El.innerHTML = stageRowHtml(1, h1);
+  pathStage1El.classList.toggle('sel', selectedStage === 0);
+  pathStage2El.classList.toggle('sel', selectedStage === 1);
+
+  // 複合行(COMPOSITE_TABLE のフィールドに即した 3 パターン)
+  const c = pathHit?.composite ?? null;
+  pathCompositeEl.textContent = !c
+    ? '複合型: —'
+    : c.morphology
+      ? `複合型: ${c.labelJa} (${c.mlCode}) — ${c.source}`
+      : `複合型: ${c.labelJa} (${c.mlCode})（専用描画なし — 最終条件の形態で表示）`;
+
+  // 大見出しは「描画中の 3D」を表す: 冠柱は専用表記、委譲時は最終(または唯一)
+  // ステージの形態。点が未設置の間は直前の表示を保持(3D も直前のまま)。
+  if (c?.morphology === '冠柱') {
+    morphJa.textContent = c.labelJa;
+    morphEn.textContent = 'Column with plates'; // ML66 Table 1 の英名
+    globalCode.textContent = c.mlCode;
+    renderHierarchy([]); // CP 系の系統表示データは 3a では持たない
+    return;
+  }
+  const lead = h1 ?? h0;
+  if (lead) {
+    const label = LABELS[lead.morphology];
+    morphJa.textContent = label.ja;
+    morphEn.textContent = label.en;
+    const code = getGlobalLabel(lead.morphology);
+    globalCode.textContent = code || '—';
+    renderHierarchy(HIERARCHY[code] ?? []);
   }
 }
 
@@ -375,17 +490,33 @@ function drawNakaya(): void {
   nctx.strokeRect(PAD.l, PAD.t, w - PAD.l - PAD.r, h - PAD.t - PAD.b);
 
   // region labels — スライダーモードは classifyOnDiagram の hit と region.id 一致で強調、
-  // 手動モードは選択 morphology に属する全領域を強調
+  // 手動モードは選択 morphology に属する全領域を強調、
+  // パスモードは ①② の所属領域をステージ色で強調(同一領域は ② 優先)
   const hit = classifyOnDiagram(readTemp(), readVapor(), ML66);
+  const pathRegion0 =
+    mode === 'path' && pathStages[0]
+      ? classifyOnDiagram(pathStages[0].temperature, pathStages[0].supersaturation, ML66).region.id
+      : null;
+  const pathRegion1 =
+    mode === 'path' && pathStages[1]
+      ? classifyOnDiagram(pathStages[1].temperature, pathStages[1].supersaturation, ML66).region.id
+      : null;
   nctx.textAlign = 'center';
   nctx.textBaseline = 'middle';
   for (const r of REGION_LABELS.anchors) {
-    const active =
-      mode === 'climate'
-        ? r.regionId === hit.region.id
-        : ML66.regions[r.regionId].morphology === currentMorph;
-    nctx.fillStyle = active ? '#cfe2ff' : 'rgba(154,166,189,0.65)';
-    nctx.font = active ? '600 10px system-ui, sans-serif' : '10px system-ui, sans-serif';
+    let color: string | null = null;
+    if (mode === 'path') {
+      if (r.regionId === pathRegion1) color = STAGE_COLORS[1];
+      else if (r.regionId === pathRegion0) color = STAGE_COLORS[0];
+    } else {
+      const active =
+        mode === 'climate'
+          ? r.regionId === hit.region.id
+          : ML66.regions[r.regionId].morphology === currentMorph;
+      if (active) color = '#cfe2ff';
+    }
+    nctx.fillStyle = color ?? 'rgba(154,166,189,0.65)';
+    nctx.font = color ? '600 10px system-ui, sans-serif' : '10px system-ui, sans-serif';
     nctx.fillText(r.labelJa, r.x, r.y);
   }
 
@@ -411,7 +542,11 @@ function drawNakaya(): void {
   nctx.textBaseline = 'top';
   nctx.fillText('気温 ℃', (PAD.l + (w - PAD.r)) / 2, h - 11);
 
-  // current marker (only meaningful in climate mode)
+  // marker — climate: 現在点 / manual: 減光 / path: 現在点は出さず ①②+矢印が担う
+  if (mode === 'path') {
+    drawGrowthPathOverlay();
+    return;
+  }
   const mx = gx(readTemp());
   const my = gy(readVapor());
   if (mode === 'climate') {
@@ -432,24 +567,200 @@ function drawNakaya(): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Input wiring — last interacted control wins
+// 成長パスモードの図上オーバーレイ(① ○ / ② ● / ①→② 矢印)と
+// ポインタ操作(クリック設置・ドラッグ移動・点クリックで選択切替)
 // ─────────────────────────────────────────────────────────────────────────
-function onClimateInput(): void {
-  mode = 'climate';
-  morphologySelect.value = ''; // reflect that sliders are now in charge
+const STAGE_R = 6;
+
+function drawStagePoint(idx: 0 | 1, x: number, y: number): void {
+  nctx.beginPath();
+  nctx.arc(x, y, STAGE_R, 0, Math.PI * 2);
+  if (idx === 0) {
+    // ① ○ 白抜き: 背景色で塗り潰し + ①色リング
+    nctx.fillStyle = 'rgba(20, 24, 33, 0.92)';
+    nctx.fill();
+    nctx.lineWidth = 2.5;
+    nctx.strokeStyle = STAGE_COLORS[0];
+    nctx.stroke();
+  } else {
+    // ② ● 塗り
+    nctx.fillStyle = STAGE_COLORS[1];
+    nctx.fill();
+    nctx.lineWidth = 1.5;
+    nctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    nctx.stroke();
+  }
+  if (selectedStage === idx) {
+    // 選択中ステージ(スライダーの束ね先)は薄いハローで示す
+    nctx.beginPath();
+    nctx.arc(x, y, STAGE_R + 4, 0, Math.PI * 2);
+    nctx.lineWidth = 1.5;
+    nctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    nctx.stroke();
+  }
+}
+
+function drawGrowthPathOverlay(): void {
+  const [s0, s1] = pathStages;
+  const p0 = s0 ? { x: gx(s0.temperature), y: gy(s0.supersaturation) } : null;
+  const p1 = s1 ? { x: gx(s1.temperature), y: gy(s1.supersaturation) } : null;
+
+  // ①→② の矢印(円周から円周へ。軸は ①色→②色のグラデーション、矢頭は ②色)。
+  // 2 点が近接して描き切れないときは省略し点のみ。
+  if (p0 && p1) {
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    const dist = Math.hypot(dx, dy);
+    const HEAD = 7;
+    const gap = STAGE_R + 3;
+    if (dist > gap * 2 + HEAD) {
+      const ux = dx / dist;
+      const uy = dy / dist;
+      const sx = p0.x + ux * gap;
+      const sy = p0.y + uy * gap;
+      const tx = p1.x - ux * gap; // 矢頭の先端
+      const ty = p1.y - uy * gap;
+      const bx = tx - ux * HEAD; // 矢頭の底 = 軸の終端
+      const by = ty - uy * HEAD;
+      const grad = nctx.createLinearGradient(sx, sy, tx, ty);
+      grad.addColorStop(0, STAGE_COLORS[0]);
+      grad.addColorStop(1, STAGE_COLORS[1]);
+      nctx.beginPath();
+      nctx.moveTo(sx, sy);
+      nctx.lineTo(bx, by);
+      nctx.strokeStyle = grad;
+      nctx.lineWidth = 2;
+      nctx.stroke();
+      nctx.beginPath();
+      nctx.moveTo(tx, ty);
+      nctx.lineTo(bx - uy * 4.5, by + ux * 4.5);
+      nctx.lineTo(bx + uy * 4.5, by - ux * 4.5);
+      nctx.closePath();
+      nctx.fillStyle = STAGE_COLORS[1];
+      nctx.fill();
+    }
+  }
+  if (p0) drawStagePoint(0, p0.x, p0.y);
+  if (p1) drawStagePoint(1, p1.x, p1.y);
+}
+
+/** ポインタ位置 → canvas 描画バッファ座標(CSS 表示サイズとの比率を補正)。 */
+function diagramXY(e: PointerEvent): { x: number; y: number } {
+  const rect = nakaya.getBoundingClientRect();
+  return {
+    x: ((e.clientX - rect.left) * nakaya.width) / rect.width,
+    y: ((e.clientY - rect.top) * nakaya.height) / rect.height,
+  };
+}
+
+/** gx/gy の逆変換。プロット枠内へクランプし、スライダー step(0.5℃ / 0.001)へ丸める。 */
+function xyToStage(x: number, y: number): GrowthStage {
+  const w = nakaya.width - PAD.l - PAD.r;
+  const h = nakaya.height - PAD.t - PAD.b;
+  const fx = Math.min(Math.max((x - PAD.l) / w, 0), 1);
+  const fy = Math.min(Math.max((y - PAD.t) / h, 0), 1);
+  const temperature = -(Math.round(fx * -TEMP_MAX * 2) / 2);
+  const supersaturation = Math.round((1 - fy) * VAP_MAX * 1000) / 1000;
+  return { temperature, supersaturation };
+}
+
+/** 図上の点ヒット判定(半径 10px、重なりは ② 優先 = 描画の前面側)。 */
+function findStageAt(x: number, y: number): 0 | 1 | null {
+  const HIT_R = 10;
+  let best: 0 | 1 | null = null;
+  let bestD = HIT_R;
+  for (const idx of [0, 1] as const) {
+    const s = pathStages[idx];
+    if (!s) continue;
+    const d = Math.hypot(x - gx(s.temperature), y - gy(s.supersaturation));
+    if (d <= bestD) {
+      best = idx;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+/** 選択中ステージの条件を既存スライダー 2 本へ反映(パスモードの「束ね」)。 */
+function syncSlidersToSelectedStage(): void {
+  const s = pathStages[selectedStage];
+  if (!s) return;
+  tempSlider.value = String(-s.temperature);
+  vaporSlider.value = String(s.supersaturation);
+}
+
+nakaya.addEventListener('pointerdown', (e) => {
+  if (mode !== 'path') return;
+  e.preventDefault();
+  const { x, y } = diagramXY(e);
+  const hitIdx = findStageAt(x, y);
+  if (hitIdx !== null) {
+    selectedStage = hitIdx; // 点クリック = 選択中ステージ切替(そのままドラッグ移動可)
+  } else {
+    const cond = xyToStage(x, y);
+    if (!pathStages[0]) selectedStage = 0; // クリック 1 回目 = ①
+    else if (!pathStages[1]) selectedStage = 1; // クリック 2 回目 = ②
+    pathStages[selectedStage] = cond; // 両点設置後は選択中ステージを移動
+  }
+  draggingStage = selectedStage;
+  nakaya.setPointerCapture(e.pointerId);
+  syncSlidersToSelectedStage();
+  rebuild();
+});
+
+nakaya.addEventListener('pointermove', (e) => {
+  if (mode !== 'path' || draggingStage === null) return;
+  const { x, y } = diagramXY(e);
+  pathStages[draggingStage] = xyToStage(x, y);
+  syncSlidersToSelectedStage();
+  rebuild(); // 矢印・3D・情報パネルがドラッグに追従(スライダー input と同コスト)
+});
+
+function endStageDrag(e: PointerEvent): void {
+  draggingStage = null;
+  if (nakaya.hasPointerCapture(e.pointerId)) nakaya.releasePointerCapture(e.pointerId);
+}
+nakaya.addEventListener('pointerup', endStageDrag);
+nakaya.addEventListener('pointercancel', endStageDrag);
+
+// ─────────────────────────────────────────────────────────────────────────
+// Input wiring — last interacted control wins(セグメントは明示切替、
+// スライダー操作 → climate / 形態選択 → manual の暗黙切替も従来どおり維持。
+// 例外: パスモード中のスライダーは選択中ステージを駆動し、モードは変えない)
+// ─────────────────────────────────────────────────────────────────────────
+function setMode(next: Mode): void {
+  mode = next;
+  for (const btn of modeButtons) btn.classList.toggle('active', btn.dataset.mode === mode);
+  nakaya.style.cursor = mode === 'path' ? 'crosshair' : '';
+  if (mode !== 'manual') morphologySelect.value = ''; // sliders / path are in charge
+  if (mode === 'path') syncSlidersToSelectedStage(); // 復帰時: 保持していた点へ束ね直す
   rebuild();
 }
 
-tempSlider.addEventListener('input', onClimateInput);
-vaporSlider.addEventListener('input', onClimateInput);
+for (const btn of modeButtons) {
+  btn.addEventListener('click', () => {
+    const next = btn.dataset.mode as Mode;
+    // 手動セグメント押下で未選択なら、表示中の形態から開始
+    if (next === 'manual' && !morphologySelect.value) morphologySelect.value = currentMorph;
+    setMode(next);
+  });
+}
+
+function onSliderInput(): void {
+  if (mode === 'path') {
+    // パスモード: スライダーは選択中ステージを駆動(点が無ければ ① を設置)
+    pathStages[selectedStage] = { temperature: readTemp(), supersaturation: readVapor() };
+    rebuild();
+    return;
+  }
+  setMode('climate');
+}
+
+tempSlider.addEventListener('input', onSliderInput);
+vaporSlider.addEventListener('input', onSliderInput);
 
 morphologySelect.addEventListener('change', () => {
-  if (morphologySelect.value) {
-    mode = 'manual';
-  } else {
-    mode = 'climate';
-  }
-  rebuild();
+  setMode(morphologySelect.value ? 'manual' : 'climate');
 });
 
 // ─────────────────────────────────────────────────────────────────────────
