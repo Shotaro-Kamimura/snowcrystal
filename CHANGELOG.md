@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sector plate (扇形) petal phase: petals now emanate from the center-column
   vertices (a-axis ⟨11-20⟩ directions, +30°), matching the dendrite arms; they
   previously emanated from {10-10} face centers.
+- Dendrite main branches are now elongated hexagonal prisms with 120-degree
+  tip facets ({10-10} trace), replacing the rectangular boxes; branch material
+  now uses flatShading, unifying shading across main and side branches.
+  Main-branch tips (z=2.1) slightly lead the outermost side-branch tips (z=2.05).
 
 ## [0.1.0] — Unreleased (initial public release)
 
