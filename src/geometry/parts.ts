@@ -2,8 +2,9 @@ import { THREE } from '../three';
 import { COLORS } from '../classify';
 import { elongatedHexOutline } from './crystallography';
 
-// Pure geometry helpers ported verbatim from snownotes main-fixed.js.
-// They depend only on THREE and return Mesh/Group — no scene, no DOM.
+// Geometry part builders. Originally ported from the snownotes viewer
+// (main-fixed.js); the remaining builders are crystallography-based
+// reimplementations on top of src/geometry/crystallography.ts.
 
 /** elongatedHexOutline を押し出した伸長六角形プリズム（原点 = 基部頂点、長軸 = +Y）。 */
 export function createElongatedHexPrism(
