@@ -90,7 +90,8 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
       const baseRadius = 0.42;
 
       for (let i = 0; i < numPetals; i++) {
-        const angle = (i * Math.PI) / 3;
+        // +30°位相: CylinderGeometry(6分割)の頂点方位（30° mod 60°）= a軸〈11-20〉に整合
+        const angle = (i * Math.PI) / 3 + Math.PI / 6;
 
         // 伸長六角形プリズムの花弁（全内角120°・対辺平行）。先端は半径 0.42 + 1.1 = 1.52
         const petal = createElongatedHexPrism(0.5, 1.1, 0.1);
