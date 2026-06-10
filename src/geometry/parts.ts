@@ -213,19 +213,17 @@ export function createElongatedHexPrism(
 export function createBranchWithChildren(angleRad: number): THREE.Group {
   const group = new THREE.Group();
 
-  // 主枝（Z方向に2.0伸びる棒）
-  const mainBranch = new THREE.Mesh(
-    new THREE.BoxGeometry(0.08, 0.08, 2.0),
-    new THREE.MeshStandardMaterial({ color: COLORS.wing }),
-  );
-  mainBranch.position.z = 1.0; // 半分ずらして中心から放射状に
+  // 主枝（伸長六角形プリズム: 先端120°ファセット）。基部頂点 = 原点で中心柱内に隠れ、
+  // 長さ2.1により先端 z=2.1 が最外副枝の先端 z=2.05 を 0.05 リードする
+  const mainBranch = createElongatedHexPrism(0.08, 2.1, 0.08);
+  mainBranch.rotation.x = Math.PI / 2; // XZ平面に寝かせ、長軸 = +Z
 
   group.add(mainBranch);
 
   // 副枝の数と間隔
   const sideCount = 3;
   const spacing = 0.5;
-  const joinX = 0.04; // 主枝（BoxGeometry 0.08）の半幅 = 主枝側面上の接合点
+  const joinX = 0.04; // 主枝（伸長六角形プリズム width 0.08）の半幅 = 主枝平行側面上の接合点
 
   for (let i = 0; i < sideCount; i++) {
     const offsetZ = spacing * (i + 1.5);
