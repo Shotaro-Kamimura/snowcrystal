@@ -5,6 +5,9 @@ import {
   disposeCrystal,
   getCrystalType,
   getGlobalLabel,
+  classifyOnDiagram,
+  waterSaturationExcessDensity,
+  ML66,
   type Morphology,
 } from '../src/index';
 
@@ -101,6 +104,7 @@ const morphJa = document.getElementById('morph-ja') as HTMLElement;
 const morphEn = document.getElementById('morph-en') as HTMLElement;
 const globalCode = document.getElementById('global-code') as HTMLElement;
 const hierarchyEl = document.getElementById('hierarchy') as HTMLElement;
+const regionLine = document.getElementById('region-line') as HTMLElement;
 
 const nakaya = document.getElementById('nakaya') as HTMLCanvasElement;
 const nctx = nakaya.getContext('2d') as CanvasRenderingContext2D;
@@ -173,16 +177,27 @@ function updateInfo(): void {
     mode === 'manual'
       ? '入力: 形態を直接選択（気温・水蒸気量は無視）'
       : '入力: 気温・水蒸気量（スライダー連動）';
+
+  // スライダーモード時のみ ML66 領域を表示（形態タイトル・Global 欄は不変）
+  if (mode === 'climate') {
+    const hit = classifyOnDiagram(readTemp(), readVapor(), ML66);
+    regionLine.textContent = `領域 / Region: ${hit.region.labelJa} (${hit.mlCode ?? '—'})`;
+    regionLine.style.display = '';
+  } else {
+    regionLine.textContent = '';
+    regionLine.style.display = 'none';
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// 2D Nakaya diagram. Regions follow the thresholds in src/classify.ts
-// (getCrystalType). classify.ts is read-only reference, never modified.
+// 2D condition diagram — generated entirely from the ML66 dataset (single
+// source, design doc §10). Region fills, boundary curves, labels and the
+// water-saturation line all derive from ML66 + waterSaturationExcessDensity;
+// classification itself stays in classifyOnDiagram (no re-implementation).
 //   x: temperature 0 (left) .. -40 (right)
-//   y: vapor 0 (bottom) .. 0.3 (top)
+//   y: vapor ρ 0 (bottom) .. 0.3 (top)。s→ρ 変換は ρ(T) = sTop(T) × ρ_ws(T) のみ
 // ─────────────────────────────────────────────────────────────────────────
 const PAD = { l: 38, r: 12, t: 10, b: 26 };
-const TEMP_MIN = 0;
 const TEMP_MAX = -40;
 const VAP_MAX = 0.3;
 
@@ -195,29 +210,151 @@ function gy(vapor: number): number {
   return PAD.t + (1 - vapor / VAP_MAX) * h;
 }
 
-// Approximate region label anchors, derived from getCrystalType thresholds.
-const REGION_LABELS: Array<{ t: number; v: number; text: string }> = [
-  { t: -2, v: 0.2, text: '角板' },
-  { t: -6, v: 0.025, text: '角柱' },
-  { t: -7, v: 0.08, text: '骸晶角柱' },
-  { t: -7, v: 0.125, text: 'さや' },
-  { t: -7, v: 0.24, text: '針' },
-  { t: -16, v: 0.025, text: '厚角板' },
-  { t: -16, v: 0.1, text: '骸晶角板' },
-  { t: -16, v: 0.175, text: '扇形' },
-  { t: -16, v: 0.26, text: '樹枝状' },
-  { t: -31, v: 0.025, text: '角柱' },
-  { t: -31, v: 0.08, text: '骸晶角柱' },
-  { t: -31, v: 0.2, text: 'さや' },
-];
+type Band = (typeof ML66)['bands'][number];
 
-// Faint vertical bands for the four temperature regimes.
-const BANDS: Array<{ from: number; to: number; color: string }> = [
-  { from: 0, to: -4, color: 'rgba(127,180,255,0.05)' },
-  { from: -4, to: -10, color: 'rgba(127,180,255,0.10)' },
-  { from: -10, to: -22, color: 'rgba(127,180,255,0.06)' },
-  { from: -22, to: -40, color: 'rgba(127,180,255,0.11)' },
-];
+const SAMPLE_DT = 0.25;
+
+/** バンド内 T での sTop 線形補間（[tMax端, tMin端]、lookup と同じ規約）。 */
+function lerpSTop(sTop: readonly [number, number], band: Band, t: number): number {
+  const f = (band.tMax - t) / (band.tMax - band.tMin);
+  return sTop[0] + (sTop[1] - sTop[0]) * f;
+}
+
+/** 段 idx の上側境界 ρ(T) = sTop(T) × ρ_ws(T)。最上段（∞）は VAP_MAX でキャップ。 */
+function upperRho(band: Band, idx: number, t: number): number {
+  const sTop = band.stack[idx].sTop;
+  if (!sTop) return VAP_MAX;
+  return Math.min(lerpSTop(sTop, band, t) * waterSaturationExcessDensity(t), VAP_MAX);
+}
+
+/** 段 idx の下側境界 ρ(T)（最下段は 0）。 */
+function lowerRho(band: Band, idx: number, t: number): number {
+  return idx === 0 ? 0 : upperRho(band, idx - 1, t);
+}
+
+/** バンドの T サンプル列（tMax → tMin、端点含む、ΔT=0.25）。 */
+function sampleTemps(band: Band): number[] {
+  const out: number[] = [];
+  for (let t = band.tMax; t > band.tMin; t -= SAMPLE_DT) out.push(t);
+  out.push(band.tMin);
+  return out;
+}
+
+interface RegionLabelAnchor {
+  regionId: string;
+  labelJa: string;
+  x: number;
+  y: number;
+}
+
+/**
+ * 領域ラベル: regionId ごとに「連続するバンドのまとまり」へグループ化し、
+ * 各まとまりの中央 T における領域 [下限, 上限] の中央 s を ρ→y 変換した点に置く。
+ * 可視高さ 8px 未満の領域（羊歯などのスライバー）はフィルのみでラベル省略。
+ */
+function buildRegionLabels(): { anchors: RegionLabelAnchor[]; skipped: string[] } {
+  const runs: Array<{ regionId: string; first: number; last: number }> = [];
+  const open = new Map<string, { regionId: string; first: number; last: number }>();
+  ML66.bands.forEach((band, bi) => {
+    const present = new Set(band.stack.map((e) => e.regionId));
+    for (const [id, run] of [...open]) {
+      if (!present.has(id)) {
+        runs.push(run);
+        open.delete(id);
+      }
+    }
+    for (const id of present) {
+      const run = open.get(id);
+      if (run) run.last = bi;
+      else open.set(id, { regionId: id, first: bi, last: bi });
+    }
+  });
+  runs.push(...open.values());
+
+  const MIN_LABEL_PX = 8;
+  const anchors: RegionLabelAnchor[] = [];
+  const skipped: string[] = [];
+  for (const run of runs) {
+    const tCenter = (ML66.bands[run.first].tMax + ML66.bands[run.last].tMin) / 2;
+    const band =
+      ML66.bands.find((b) => tCenter <= b.tMax && tCenter > b.tMin) ??
+      ML66.bands[ML66.bands.length - 1];
+    const idx = band.stack.findIndex((e) => e.regionId === run.regionId);
+    if (idx < 0) continue;
+    const lo = lowerRho(band, idx, tCenter);
+    const hi = upperRho(band, idx, tCenter);
+    const labelJa = ML66.regions[run.regionId].labelJa;
+    if (Math.abs(gy(lo) - gy(hi)) < MIN_LABEL_PX) {
+      skipped.push(`${labelJa} (${run.regionId})`);
+      continue;
+    }
+    // プロット外へのはみ出しはクランプ
+    const x = Math.min(Math.max(gx(tCenter), PAD.l + 12), nakaya.width - PAD.r - 12);
+    const y = Math.min(Math.max(gy((lo + hi) / 2), PAD.t + 6), nakaya.height - PAD.b - 6);
+    anchors.push({ regionId: run.regionId, labelJa, x, y });
+  }
+  return { anchors, skipped };
+}
+
+const REGION_LABELS = buildRegionLabels();
+if (REGION_LABELS.skipped.length > 0) {
+  console.info('[diagram] sliver regions without label:', REGION_LABELS.skipped.join(', '));
+}
+
+function drawRegionFills(): void {
+  for (const band of ML66.bands) {
+    const temps = sampleTemps(band);
+
+    // 段フィル（段位置の偶奇で低アルファ2種を交互に）
+    band.stack.forEach((_, idx) => {
+      nctx.beginPath();
+      temps.forEach((t, i) => {
+        if (i === 0) nctx.moveTo(gx(t), gy(upperRho(band, idx, t)));
+        else nctx.lineTo(gx(t), gy(upperRho(band, idx, t)));
+      });
+      for (let i = temps.length - 1; i >= 0; i--) {
+        nctx.lineTo(gx(temps[i]), gy(lowerRho(band, idx, temps[i])));
+      }
+      nctx.closePath();
+      nctx.fillStyle = idx % 2 === 0 ? 'rgba(127,180,255,0.06)' : 'rgba(127,180,255,0.12)';
+      nctx.fill();
+    });
+
+    // 境界線（有限 sTop の曲線のみ。細い低アルファ白）
+    band.stack.forEach((entry, idx) => {
+      if (!entry.sTop) return;
+      nctx.beginPath();
+      temps.forEach((t, i) => {
+        if (i === 0) nctx.moveTo(gx(t), gy(upperRho(band, idx, t)));
+        else nctx.lineTo(gx(t), gy(upperRho(band, idx, t)));
+      });
+      nctx.strokeStyle = 'rgba(255,255,255,0.10)';
+      nctx.lineWidth = 0.75;
+      nctx.stroke();
+    });
+  }
+}
+
+function drawWaterSaturation(): void {
+  // s = 1 すなわち ρ_ws(T) の破線カーブ（極大は −12 付近）
+  nctx.beginPath();
+  for (let t = 0; t >= TEMP_MAX; t -= SAMPLE_DT) {
+    const y = gy(Math.min(waterSaturationExcessDensity(t), VAP_MAX));
+    if (t === 0) nctx.moveTo(gx(t), y);
+    else nctx.lineTo(gx(t), y);
+  }
+  nctx.setLineDash([4, 3]);
+  nctx.strokeStyle = 'rgba(207,226,255,0.5)';
+  nctx.lineWidth = 1;
+  nctx.stroke();
+  nctx.setLineDash([]);
+
+  nctx.font = '9px system-ui, sans-serif';
+  nctx.fillStyle = 'rgba(207,226,255,0.55)';
+  nctx.textAlign = 'center';
+  nctx.textBaseline = 'bottom';
+  nctx.fillText('水飽和 / water sat.', gx(-34), gy(waterSaturationExcessDensity(-34)) - 3);
+}
 
 function drawNakaya(): void {
   const w = nakaya.width;
@@ -228,28 +365,28 @@ function drawNakaya(): void {
   nctx.fillStyle = 'rgba(255,255,255,0.02)';
   nctx.fillRect(PAD.l, PAD.t, w - PAD.l - PAD.r, h - PAD.t - PAD.b);
 
-  // temperature bands
-  for (const band of BANDS) {
-    const x0 = gx(band.from);
-    const x1 = gx(band.to);
-    nctx.fillStyle = band.color;
-    nctx.fillRect(Math.min(x0, x1), PAD.t, Math.abs(x1 - x0), h - PAD.t - PAD.b);
-  }
+  // ML66 dataset-driven fills + water saturation curve
+  drawRegionFills();
+  drawWaterSaturation();
 
   // frame
   nctx.strokeStyle = 'rgba(255,255,255,0.18)';
   nctx.lineWidth = 1;
   nctx.strokeRect(PAD.l, PAD.t, w - PAD.l - PAD.r, h - PAD.t - PAD.b);
 
-  // region labels
-  nctx.font = '10px system-ui, sans-serif';
+  // region labels — スライダーモードは classifyOnDiagram の hit と region.id 一致で強調、
+  // 手動モードは選択 morphology に属する全領域を強調
+  const hit = classifyOnDiagram(readTemp(), readVapor(), ML66);
   nctx.textAlign = 'center';
   nctx.textBaseline = 'middle';
-  for (const r of REGION_LABELS) {
-    const active = r.text === currentMorph;
+  for (const r of REGION_LABELS.anchors) {
+    const active =
+      mode === 'climate'
+        ? r.regionId === hit.region.id
+        : ML66.regions[r.regionId].morphology === currentMorph;
     nctx.fillStyle = active ? '#cfe2ff' : 'rgba(154,166,189,0.65)';
     nctx.font = active ? '600 10px system-ui, sans-serif' : '10px system-ui, sans-serif';
-    nctx.fillText(r.text, gx(r.t), gy(r.v));
+    nctx.fillText(r.labelJa, r.x, r.y);
   }
 
   // axis ticks (temperature)
