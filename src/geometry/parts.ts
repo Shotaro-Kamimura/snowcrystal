@@ -1,6 +1,6 @@
 import { THREE } from '../three';
 import { COLORS } from '../classify';
-import { elongatedHexOutline } from './crystallography';
+import { elongatedHexOutline, hexPyramidApexHeight } from './crystallography';
 
 // Geometry part builders. Originally ported from the snownotes viewer
 // (main-fixed.js); the remaining builders are crystallography-based
@@ -25,6 +25,38 @@ export function createElongatedHexPrism(
 
   const material = new THREE.MeshStandardMaterial({ color: COLORS.wing, flatShading: true });
   return new THREE.Mesh(geometry, material);
+}
+
+/**
+ * 砲弾（ML66 C1c/C1d 統合）部品。六角柱 + {10-1̄1} 六角錐の終端。
+ *
+ * ローカル座標規約: 錐の apex = 原点、軸 = +Y。
+ * 錐は y ∈ [0, h]（h = hexPyramidApexHeight(radius) ≈ 1.628·R、錐面は軸から 28.0°）、
+ * 柱は y ∈ [h, h + bodyLength]。両リングの 6 頂点は位相整合し一致する。
+ * children: [0] = 錐、[1] = 柱。マテリアルは COLORS.wing / flatShading: true（統一規約）。
+ *
+ * 将来拡張（予約、引数は今回追加しない）:
+ * - tipTruncation: 錐先端を小さな基底面で切る（既定 0 = シャープ apex）
+ * - hollow: C1d の基底側空洞（骸晶系と同じ意匠）
+ */
+export function createBullet(radius: number, bodyLength: number): THREE.Group {
+  const group = new THREE.Group();
+  const material = new THREE.MeshStandardMaterial({ color: COLORS.wing, flatShading: true });
+
+  const apexHeight = hexPyramidApexHeight(radius);
+
+  // 錐: ConeGeometry は apex が +Y 端なので反転し、apex を原点・底リングを y = h に置く
+  const coneGeo = new THREE.ConeGeometry(radius, apexHeight, 6);
+  coneGeo.rotateX(Math.PI);
+  coneGeo.translate(0, apexHeight / 2, 0);
+  group.add(new THREE.Mesh(coneGeo, material));
+
+  // 柱: 下リングが錐の底リングと一致するよう y ∈ [h, h + bodyLength] に配置
+  const bodyGeo = new THREE.CylinderGeometry(radius, radius, bodyLength, 6, 1);
+  bodyGeo.translate(0, apexHeight + bodyLength / 2, 0);
+  group.add(new THREE.Mesh(bodyGeo, material));
+
+  return group;
 }
 
 export function createBranchWithChildren(angleRad: number): THREE.Group {

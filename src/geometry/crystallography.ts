@@ -12,6 +12,37 @@ export const A_AXES: ReadonlyArray<readonly [number, number]> = [
   [Math.cos((2 * Math.PI) / 3), Math.sin((2 * Math.PI) / 3)],
 ];
 
+/** 氷 Ih の格子定数 a [Å]（Petrenko & Whitworth, Physics of Ice, 1999） */
+export const ICE_A_ANGSTROM = 4.518;
+
+/** 氷 Ih の格子定数 c [Å]（Petrenko & Whitworth, Physics of Ice, 1999） */
+export const ICE_C_ANGSTROM = 7.356;
+
+/** 軸比 c/a ≈ 1.628。{10-1̄1} 錐面・六角錐高さの導出に使う。 */
+export const ICE_C_OVER_A = ICE_C_ANGSTROM / ICE_A_ANGSTROM;
+
+/**
+ * {10-1̄1} 錐面が c 軸（柱軸）となす角 [rad]。
+ *
+ * tan(錐面と軸のなす角) = √3·a / (2c) → ≈ 28.0°
+ *
+ * 錐面の法線が c 軸となす角（= 錐面と基底面 (0001) の二面角）は補角の ≈ 62.0°。
+ * 格子定数の出典: Petrenko & Whitworth, Physics of Ice (1999)。
+ */
+export const PYRAMID_FACE_ANGLE_FROM_AXIS_RAD = Math.atan(
+  (Math.sqrt(3) * ICE_A_ANGSTROM) / (2 * ICE_C_ANGSTROM),
+);
+
+/**
+ * 外接半径 R の {10-1̄1} 六角錐がシャープに閉じるときの apex 高さ h = R·(c/a) ≈ 1.628R。
+ *
+ * 導出: 錐面は柱面 {10-1̄0} の上端エッジ（アポセム R√3/2）から軸へ内傾 28.0° で閉じるため、
+ * h = (R√3/2) / tan(28.0°) = (R√3/2) · (2c)/(√3·a) = R·c/a。
+ */
+export function hexPyramidApexHeight(circumradius: number): number {
+  return circumradius * ICE_C_OVER_A;
+}
+
 /**
  * 伸長六角形のアウトラインを返す（反時計回り）。
  *
