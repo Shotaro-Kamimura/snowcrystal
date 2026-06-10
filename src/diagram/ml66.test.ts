@@ -14,8 +14,9 @@ describe('ML66 ゴールデン(一次資料アンカー)', () => {
       [-5, 1.2, '針'],
       [-7, 1.2, 'さや'],
       [-9, 1.2, '骸晶角柱'],
-      [-15, 0.9, '樹枝状'], // 星状(P1d)領域 → 描画は樹枝状
-      [-12, 1.2, '骸晶角板'],
+      [-15, 0.9, '扇形'], // 広幅枝(P1c)領域 → 描画は扇形(2026-06-10 修正で挿入)
+      [-15, 1.05, '樹枝状'], // 星状(P1d)領域 → 描画は樹枝状(水飽和直上へ移動後)
+      [-12, 1.2, '骸晶角板'], // 隣接バンド (−13,−10] は非変更(不変確認)
       [-2, 0.5, '角板'],
       [-22, 0.3, '角柱'], // 対角線の下(t=−22 で sTop ≈ 0.32)
       [-22, 0.8, '骸晶角柱'], // C1f
@@ -33,12 +34,21 @@ describe('ML66 ゴールデン(一次資料アンカー)', () => {
     }
   });
 
-  it('a. v1 定番条件の互換: (−15, ρ=0.25) → 樹枝状', () => {
+  it('a. v1 定番条件の互換: (−15, ρ=0.25) → ml66/P1e・樹枝状(領域・形態とも不変)', () => {
+    // P1d/P1c 修正(2026-06-10)後も s ≈ 1.145 は P1d 上限 1.12 と P1e 上限 1.35 の間に
+    // とどまるため、v1 定番の目視条件は領域(P1e)・形態(樹枝状)とも不変であることを固定する
     expect(getCrystalType(-15, 0.25)).toBe('樹枝状');
+    const hit = classifyOnDiagram(-15, 0.25, ML66);
+    expect(hit.region.id).toBe('ml66/P1e');
   });
 
-  it('a. 領域メタデータ: 星状は P1d/approx、長柱は labelJa付きの角柱', () => {
-    const hoshi = classifyOnDiagram(-15, vaporAt(-15, 0.9), ML66);
+  it('a. 領域メタデータ: 広幅枝は P1c/approx、星状は P1d/approx、長柱は labelJa付きの角柱', () => {
+    const kouhaba = classifyOnDiagram(-15, vaporAt(-15, 0.9), ML66);
+    expect(kouhaba.mlCode).toBe('P1c');
+    expect(kouhaba.region.fidelity).toBe('approx');
+    expect(kouhaba.morphology).toBe('扇形');
+
+    const hoshi = classifyOnDiagram(-15, vaporAt(-15, 1.05), ML66);
     expect(hoshi.mlCode).toBe('P1d');
     expect(hoshi.region.fidelity).toBe('approx');
     expect(hoshi.morphology).toBe('樹枝状');

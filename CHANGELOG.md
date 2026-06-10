@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saturation curve; internal relative-saturation axis s = ρ/ρ_ws(T) with s=1 at
   water saturation). The v1 behavior remains available explicitly as
   `classifyOnDiagram(t, v, NAKAYA_V1)`.
+- ML66 dataset refinement (user-verified Fig.2 sketch IDs, 2026-06-10): the P1d
+  stellar region in the (−17, −13] band now sits just above water saturation
+  (sTop 1.0 → 1.12), and a new P1c broad-branch region (rendered as 扇形,
+  approx) is inserted below it; the P1e dendrite region and the v1 showcase
+  condition (−15°C, ρ=0.25) are unchanged.
 - **BREAKING (planned for 0.2.0)**: the `Morphology` union expanded with
   '砲弾集合' and '側面' — consumer code with exhaustive switches over
   `Morphology` must be updated.
