@@ -1,4 +1,6 @@
 import type { Morphology } from './types';
+import { classifyOnDiagram } from './diagram/lookup';
+import { NAKAYA_V1 } from './diagram/nakaya-v1';
 
 /** Shared palette (ported verbatim from the snownotes viewer). */
 export const COLORS = {
@@ -108,29 +110,12 @@ export const FULL_SUBTYPE_MAP: Record<string, string[]> = {
 /**
  * Map a Nakaya-diagram point (temperature °C, vapor 0–0.3) to a morphology.
  * Temperatures are expected as negative values (e.g. -10 means -10°C).
- * Ported verbatim from the snownotes viewer.
+ * 本体は classifyOnDiagram(temp, vapor, NAKAYA_V1) への委譲(v1 しきい値のデータ化、挙動不変)。
+ * 注: T を tDomain [-40, 0] にクランプするため、域外(T>0・T<-40)のみ旧実装の
+ * フォールバック '角板' と返り値が変わる(スライダー域外のみの意図的変更)。
  */
 export function getCrystalType(temp: number, vapor: number): Morphology {
-  // ⛏️ 高温 → 低温 の順で条件を整理（0℃〜-40℃）
-  if (temp <= 0 && temp > -4) {
-    if (vapor >= 0.1 && vapor <= 0.3) return '角板';
-  } else if (temp <= -4 && temp > -10) {
-    if (vapor <= 0.05) return '角柱';
-    if (vapor <= 0.1) return '骸晶角柱';
-    if (vapor <= 0.15) return 'さや';
-    return '針';
-  } else if (temp <= -10 && temp > -22) {
-    if (vapor <= 0.05) return '厚角板';
-    if (vapor <= 0.15) return '骸晶角板';
-    if (vapor <= 0.2) return '扇形';
-    return '樹枝状';
-  } else if (temp <= -22 && temp >= -40) {
-    if (vapor <= 0.05) return '角柱';
-    if (vapor <= 0.1) return '骸晶角柱';
-    return 'さや';
-  }
-
-  return '角板'; // fallback
+  return classifyOnDiagram(temp, vapor, NAKAYA_V1).morphology;
 }
 
 /** Morphology name -> global-classification subtype code. */
