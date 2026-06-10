@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { waterSaturationExcessDensity } from './saturation';
+import { waterSaturationExcessDensity as fromIndex } from '../index';
 
 describe('waterSaturationExcessDensity (Murphy & Koop 2005)', () => {
   it('b. 文献アンカー値と一致する [g/m³]', () => {
@@ -14,6 +15,10 @@ describe('waterSaturationExcessDensity (Murphy & Koop 2005)', () => {
       const actual = waterSaturationExcessDensity(tc);
       expect(Math.abs(actual - expected), `ρ_ws(${tc}) = ${actual}`).toBeLessThanOrEqual(tol);
     }
+  });
+
+  it('index 経由の export が直 import と一致する(ρ_ws(−15))', () => {
+    expect(fromIndex(-15)).toBe(waterSaturationExcessDensity(-15));
   });
 
   it('b. 極大が −11〜−16°C にある', () => {

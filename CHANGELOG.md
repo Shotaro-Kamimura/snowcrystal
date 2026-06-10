@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Morphology` must be updated.
 
 ### Added
+- `waterSaturationExcessDensity(tempC)` is now exported — the ρ_ws(T) water-vs-ice
+  saturation vapor-density difference curve (Murphy & Koop 2005), so consumers
+  (and the playground) can draw the water-saturation line (s = 1) of the
+  condition diagram.
 - New morphologies **砲弾集合** (combination of bullets, ML66 C2a) and **側面**
   (side planes, ML66 S1/S2) — classification only for now; rendering falls back
   to the 角柱 / 厚角板 geometry until the dedicated geometry lands (Phase 2 step 3).
