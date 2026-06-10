@@ -189,8 +189,12 @@ export function createRedTriangularPrism(): THREE.Mesh {
   return new THREE.Mesh(geometry, material);
 }
 
-/** elongatedHexOutline を押し出した副枝プリズム（原点 = 基部頂点、長軸 = +Y）。 */
-function createSideBranchPrism(width: number, length: number, thickness: number): THREE.Mesh {
+/** elongatedHexOutline を押し出した伸長六角形プリズム（原点 = 基部頂点、長軸 = +Y）。 */
+export function createElongatedHexPrism(
+  width: number,
+  length: number,
+  thickness: number,
+): THREE.Mesh {
   const outline = elongatedHexOutline(width, length);
   const shape = new THREE.Shape();
   shape.moveTo(outline[0][0], outline[0][1]);
@@ -227,8 +231,8 @@ export function createBranchWithChildren(angleRad: number): THREE.Group {
     const offsetZ = spacing * (i + 1.5);
 
     // 左右の副枝（伸長六角形プリズム: 全内角120°・対辺平行）
-    const petalL = createSideBranchPrism(0.3, 0.6, 0.05);
-    const petalR = createSideBranchPrism(0.3, 0.6, 0.05);
+    const petalL = createElongatedHexPrism(0.3, 0.6, 0.05);
+    const petalR = createElongatedHexPrism(0.3, 0.6, 0.05);
 
     // XZ平面上に寝かせ、長軸の先端を主枝の先端側（外向き）へ±60°で開く
     // （結晶学的に副枝は隣接a軸に平行 = 主枝に対し±60°、開き120°）。
