@@ -1,7 +1,7 @@
 import { THREE } from '../three';
 import { COLORS } from '../classify';
 import type { Morphology } from '../types';
-import { createElongatedHexPrism, createBranchWithChildren } from './parts';
+import { createElongatedHexPrism, createBranchWithChildren, createBulletRosette } from './parts';
 
 /**
  * Build the THREE.Group for a single morphology.
@@ -11,8 +11,12 @@ import { createElongatedHexPrism, createBranchWithChildren } from './parts';
  */
 export function buildMorphology(morphology: Morphology, rng: () => number): THREE.Group {
   switch (morphology) {
-    // 暫定フォールバック: 角柱と同一ジオメトリ(Phase 2 ステップ3で本実装に差し替え)
-    case '砲弾集合':
+    case '砲弾集合': {
+      // 凍結雲粒起源の多結晶: シード乱数の放射腕(3〜6本)が {10-1̄1} 錐端を
+      // 中心向きに会合する。seed→rng の経路は針(C1a)の長さ乱数と同一
+      return createBulletRosette(rng);
+    }
+
     case '角柱': {
       const geo = new THREE.CylinderGeometry(0.4, 0.4, 1.5, 6);
       const baseMat = new THREE.MeshStandardMaterial({ color: COLORS.base, flatShading: true });

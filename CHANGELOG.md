@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New morphologies **砲弾集合** (combination of bullets, ML66 C2a) and **側面**
   (side planes, ML66 S1/S2) — classification only for now; rendering falls back
   to the 角柱 / 厚角板 geometry until the dedicated geometry lands (Phase 2 step 3).
+- 砲弾集合 now renders its dedicated geometry: 3–6 seeded radial bullet arms
+  ({10-1̄1} pyramidal tips, 62° to basal) meeting at the center with mutual
+  angles ≥ 50°, replacing the interim 角柱 fallback (側面 still falls back to
+  厚角板).
 - Internal `crystallography` module (THREE-independent pure functions): `A_AXES`
   basal-plane a-axis basis and `elongatedHexOutline` ({10-10}-consistent elongated
   hexagon), with automated vitest checks for 120° interior angles, 60°-family edge

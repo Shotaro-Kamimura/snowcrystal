@@ -1,6 +1,7 @@
 import { THREE } from '../three';
 import { COLORS } from '../classify';
 import { elongatedHexOutline, hexPyramidApexHeight } from './crystallography';
+import { sampleRosetteAxes } from './rosette';
 
 // Geometry part builders. Originally ported from the snownotes viewer
 // (main-fixed.js); the remaining builders are crystallography-based
@@ -55,6 +56,52 @@ export function createBullet(radius: number, bodyLength: number): THREE.Group {
   const bodyGeo = new THREE.CylinderGeometry(radius, radius, bodyLength, 6, 1);
   bodyGeo.translate(0, apexHeight + bodyLength / 2, 0);
   group.add(new THREE.Mesh(bodyGeo, material));
+
+  return group;
+}
+
+export interface BulletRosetteOptions {
+  /** 砲弾の外接半径(既定 0.3。角柱の半径 0.4 の 0.75 倍) */
+  radius?: number;
+  /** 柱部長(既定 0.9 = 3R。設計書 §2 の既定アスペクト 2.5R〜3R の上限側) */
+  bodyLength?: number;
+  /** 腕本数(省略時 rng で 3〜6) */
+  count?: number;
+}
+
+/**
+ * 砲弾集合(ML66 C2a)。凍結雲粒起源の多結晶を、共通中心から放射する
+ * 3〜6 本の砲弾(錐端=中心向き)で表す(設計書 §3)。
+ *
+ * - 腕方位は sampleRosetteAxes(全ペア相互角 ≥ 50°、失敗時は正準配置)。
+ * - 各砲弾は apex を中心方向へ δ = 0.05·R 埋め込み(隙間・Zファイト回避。
+ *   多結晶コアの明示モデル化はしない)。
+ * - 軸まわりロール角は腕ごとに rng。第一版は全砲弾同寸(長さ揺らぎは opts で後送)。
+ */
+export function createBulletRosette(
+  rng: () => number,
+  opts: BulletRosetteOptions = {},
+): THREE.Group {
+  const radius = opts.radius ?? 0.3;
+  const bodyLength = opts.bodyLength ?? 0.9;
+  const embed = 0.05 * radius; // δ
+
+  const group = new THREE.Group();
+  const yAxis = new THREE.Vector3(0, 1, 0);
+
+  for (const [ax, ay, az] of sampleRosetteAxes(rng, opts.count)) {
+    const bullet = createBullet(radius, bodyLength);
+    const axis = new THREE.Vector3(ax, ay, az);
+
+    // ローカル +Y(apex→柱)を腕方位へ向け、軸まわりに個別ロール
+    bullet.quaternion.setFromUnitVectors(yAxis, axis);
+    bullet.rotateY(rng() * Math.PI * 2);
+
+    // apex を中心へ δ 埋め込み(腕は軸に沿って [-δ, h+L-δ] を占める)
+    bullet.position.set(-embed * ax, -embed * ay, -embed * az);
+
+    group.add(bullet);
+  }
 
   return group;
 }
