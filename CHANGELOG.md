@@ -4,6 +4,21 @@ All notable changes to **snowcrystal** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Internal `crystallography` module (THREE-independent pure functions): `A_AXES`
+  basal-plane a-axis basis and `elongatedHexOutline` ({10-10}-consistent elongated
+  hexagon), with automated vitest checks for 120° interior angles, 60°-family edge
+  orientations, and parallel-side spacing. Not yet part of the public API.
+
+### Fixed
+- Dendrite (樹枝状) side branches: opening angle corrected from ±45° to ±60°
+  (90° → 120°) with tips now pointing outward, per {10-10} prism-face geometry.
+- Dendrite side-branch shape: kite prisms (non-parallel sides) replaced with
+  elongated hexagons — parallel sides, all interior angles 120°, base vertex
+  flush on the main-branch face.
+
 ## [0.1.0] — Unreleased (initial public release)
 
 First public release.
