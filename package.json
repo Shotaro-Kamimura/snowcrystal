@@ -43,6 +43,7 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
@@ -54,6 +55,7 @@
     "three": "^0.160.0",
     "typescript": "^5.4.0",
     "vite": "^5.2.0",
-    "vite-plugin-dts": "^3.9.0"
+    "vite-plugin-dts": "^3.9.0",
+    "vitest": "^3.2.6"
   }
 }
