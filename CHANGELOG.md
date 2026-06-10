@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sector plate (扇形) petals: kite prisms replaced with elongated hexagons —
   outer tip angle 90° → 120°, parallel sides, base vertex inside the center
   column (zero gap); tip radius 1.52 keeps the v1 outline.
+- Sector plate (扇形) petal phase: petals now emanate from the center-column
+  vertices (a-axis ⟨11-20⟩ directions, +30°), matching the dendrite arms; they
+  previously emanated from {10-10} face centers.
 
 ## [0.1.0] — Unreleased (initial public release)
 
