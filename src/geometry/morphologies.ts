@@ -1,7 +1,7 @@
 import { THREE } from '../three';
 import { COLORS } from '../classify';
 import type { Morphology } from '../types';
-import { createDiamondPrism, createBranchWithChildren } from './parts';
+import { createElongatedHexPrism, createBranchWithChildren } from './parts';
 
 /**
  * Build the THREE.Group for a single morphology.
@@ -86,34 +86,21 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
       group.add(centerMesh);
 
       const numPetals = 6;
-      const radius = 1.1;
-      const tilt = -Math.PI / 2; // -90度で倒す（XZ平面に寝かせる）
+      // 基部頂点の半径。中心柱の内接半径 0.5·cos30° ≈ 0.433 より内側に置き、隙間ゼロを保証
+      const baseRadius = 0.42;
 
       for (let i = 0; i < numPetals; i++) {
         const angle = (i * Math.PI) / 3;
 
-        // 菱形羽根の生成
-        const petal = createDiamondPrism();
+        // 伸長六角形プリズムの花弁（全内角120°・対辺平行）。先端は半径 0.42 + 1.1 = 1.52
+        const petal = createElongatedHexPrism(0.5, 1.1, 0.1);
 
-        // 羽根をZ軸で90度回して鋭角を前に（重要）
-        petal.rotation.z = Math.PI / 2;
+        // XZ平面に寝かせ（厚み中心 y=0）、長軸の先端を放射方向外向きへ
+        petal.rotation.x = Math.PI / 2;
+        petal.rotation.z = angle - Math.PI / 2; // 長軸 +Y → (cosθ, 0, sinθ)
+        petal.position.set(baseRadius * Math.cos(angle), 0, baseRadius * Math.sin(angle));
 
-        // 倒す（XZ平面に沿って）
-        petal.rotation.x = tilt;
-
-        // 中間グループで回転と配置を制御
-        const petalGroup = new THREE.Group();
-        petalGroup.add(petal);
-
-        // 鋭角を中心方向へ向ける（Y軸回転）
-        petalGroup.rotation.y = -angle;
-
-        // 鋭角の先端が中心に届くよう配置
-        const x = radius * Math.cos(angle);
-        const z = radius * Math.sin(angle);
-        petalGroup.position.set(x, 0, z);
-
-        group.add(petalGroup);
+        group.add(petal);
       }
       return group;
     }
