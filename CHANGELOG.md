@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ({10-1̄1} pyramidal tips, 62° to basal) meeting at the center with mutual
   angles ≥ 50°, replacing the interim 角柱 fallback (側面 still falls back to
   厚角板).
+- 側面 now renders its dedicated geometry: 4–7 thin half-hex fins fanned around
+  a shared a-axis spine with CSL 70.3° twin-anchored dihedral offsets (±6°
+  jitter), per-fin size jitter ±20% and spine stagger, replacing the interim
+  厚角板 fallback — completing the Phase 2 step-3 geometry work.
 - Internal `crystallography` module (THREE-independent pure functions): `A_AXES`
   basal-plane a-axis basis and `elongatedHexOutline` ({10-10}-consistent elongated
   hexagon), with automated vitest checks for 120° interior angles, 60°-family edge

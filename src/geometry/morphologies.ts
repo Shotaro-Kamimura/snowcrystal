@@ -1,7 +1,12 @@
 import { THREE } from '../three';
 import { COLORS } from '../classify';
 import type { Morphology } from '../types';
-import { createElongatedHexPrism, createBranchWithChildren, createBulletRosette } from './parts';
+import {
+  createElongatedHexPrism,
+  createBranchWithChildren,
+  createBulletRosette,
+  createSidePlanes,
+} from './parts';
 
 /**
  * Build the THREE.Group for a single morphology.
@@ -221,8 +226,12 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
       return group;
     }
 
-    // 暫定フォールバック: 厚角板と同一ジオメトリ(Phase 2 ステップ3で本実装に差し替え)
-    case '側面':
+    case '側面': {
+      // 凍結雲粒起源の多結晶: 共通スパイン(a軸)から CSL 70.3° アンカーの二面角で
+      // 張り出す半六角薄板 4〜7 枚。seed→rng の経路は針・ロゼットと同一
+      return createSidePlanes(rng);
+    }
+
     case '厚角板': {
       const geo = new THREE.CylinderGeometry(0.6, 0.6, 0.4, 6);
       const mat = new THREE.MeshStandardMaterial({

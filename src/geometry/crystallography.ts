@@ -34,6 +34,40 @@ export const PYRAMID_FACE_ANGLE_FROM_AXIS_RAD = Math.atan(
 );
 
 /**
+ * 多結晶雪結晶の成分間 c 軸角の CSL(一致格子)双晶角 [deg]。
+ *
+ * 出典: Kobayashi, Furukawa, Takahashi & Uyeda (1976) "Cubic structure models
+ * at the junctions in polycrystalline snow crystals", J. Crystal Growth 35,
+ * 262–268 — 接合部に立方晶構造を持つ双晶モデル。CSL 理論の系譜では低エネルギー
+ * 境界として 70.3°/[11-20](a 軸まわり 70.3° 回転)が導かれ、−20°C 以深の
+ * 交差板結晶(2〜4 枚の基底面薄板)はこの粒界沿いに延びると報告されている。
+ *
+ * 立方晶接合モデルの理想角は四面体角 acos(1/3) ≈ 70.53°。CSL の近一致計算では
+ * 70.3° となり、本パッケージはこちらを採用する。
+ */
+export const CSL_TWIN_ANGLE_DEG = 70.3;
+
+/**
+ * 正六角形(外接半径 R)を長対角線で半裁した四角形のアウトライン(反時計回り)。
+ *
+ * スパイン辺 = 長対角線(長さ 2R)で、方向は a 軸 A_AXES[0]([1, 0])、中点 = 原点。
+ * フィンは +y 側へ張り出し、外周 3 辺は {10-1̄0} 柱面トレース(辺方位は 60° 系列)。
+ * 内角列は 60° / 120° / 120° / 60°。
+ */
+export function halfHexOutline(circumradius: number): Array<[number, number]> {
+  if (!(circumradius > 0)) {
+    throw new Error(`halfHexOutline: circumradius must be > 0 (got ${circumradius})`);
+  }
+  const s = (Math.sqrt(3) / 2) * circumradius;
+  return [
+    [circumradius, 0],
+    [circumradius / 2, s],
+    [-circumradius / 2, s],
+    [-circumradius, 0],
+  ];
+}
+
+/**
  * 外接半径 R の {10-1̄1} 六角錐がシャープに閉じるときの apex 高さ h = R·(c/a) ≈ 1.628R。
  *
  * 導出: 錐面は柱面 {10-1̄0} の上端エッジ（アポセム R√3/2）から軸へ内傾 28.0° で閉じるため、
