@@ -1,6 +1,6 @@
 import type { Morphology } from './types';
 import { classifyOnDiagram } from './diagram/lookup';
-import { NAKAYA_V1 } from './diagram/nakaya-v1';
+import { ML66 } from './diagram/ml66';
 
 /** Shared palette (ported verbatim from the snownotes viewer). */
 export const COLORS = {
@@ -20,6 +20,8 @@ export const TITLE_MAP: Record<Morphology, { ja: string; en: string }> = {
   骸晶角板: { ja: '骸晶角板', en: 'Skeleton Plate' },
   扇形: { ja: '扇形', en: 'Sector' },
   樹枝状: { ja: '樹枝状', en: 'Dendrite' },
+  砲弾集合: { ja: '砲弾集合', en: 'Combination of Bullets' },
+  側面: { ja: '側面', en: 'Side Planes' },
 };
 
 /** Short subtype lists keyed by global-classification code. */
@@ -108,17 +110,21 @@ export const FULL_SUBTYPE_MAP: Record<string, string[]> = {
 };
 
 /**
- * Map a Nakaya-diagram point (temperature °C, vapor 0–0.3) to a morphology.
+ * Map a condition-diagram point (temperature °C, vapor 0–0.3 [g/m³]) to a morphology.
  * Temperatures are expected as negative values (e.g. -10 means -10°C).
- * 本体は classifyOnDiagram(temp, vapor, NAKAYA_V1) への委譲(v1 しきい値のデータ化、挙動不変)。
- * 注: T を tDomain [-40, 0] にクランプするため、域外(T>0・T<-40)のみ旧実装の
- * フォールバック '角板' と返り値が変わる(スライダー域外のみの意図的変更)。
+ * v2: 既定の条件図は Magono & Lee (1966) Fig.2 由来の ML66(設計書 §8)。
+ * v1(Nakaya しきい値)の挙動が必要な場合は classifyOnDiagram(temp, vapor, NAKAYA_V1) を明示。
+ * 注: T は tDomain [-40, 0] にクランプされる(域外はスライダー範囲外のみの意図的変更)。
  */
 export function getCrystalType(temp: number, vapor: number): Morphology {
-  return classifyOnDiagram(temp, vapor, NAKAYA_V1).morphology;
+  return classifyOnDiagram(temp, vapor, ML66).morphology;
 }
 
-/** Morphology name -> global-classification subtype code. */
+/**
+ * Morphology name -> global-classification subtype code.
+ * 砲弾集合・側面はグローバル分類(菊地ほか 2012)のコード未割当のため ''
+ * (専門家確認事項(4)、docs/phase2-ml66-diagram-design.md §13)。
+ */
 export function getSubtypeCode(typeName: Morphology | '' | undefined): string {
   if (!typeName) return '';
   if (typeName === '針') return 'C1a';
@@ -133,7 +139,10 @@ export function getSubtypeCode(typeName: Morphology | '' | undefined): string {
   return '';
 }
 
-/** Morphology name -> global-classification label shown in the UI. */
+/**
+ * Morphology name -> global-classification label shown in the UI.
+ * 砲弾集合・側面はグローバル分類コード未割当のため ''(専門家確認事項(4))。
+ */
 export function getGlobalLabel(typeName: Morphology): string {
   switch (typeName) {
     case '針':
@@ -154,6 +163,9 @@ export function getGlobalLabel(typeName: Morphology): string {
       return 'P4f';
     case '樹枝状':
       return 'P4g';
+    case '砲弾集合':
+    case '側面':
+      return ''; // グローバル分類コード未割当(専門家確認事項(4))
     default:
       return '';
   }

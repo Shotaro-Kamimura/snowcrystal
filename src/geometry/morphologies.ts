@@ -11,6 +11,8 @@ import { createElongatedHexPrism, createBranchWithChildren } from './parts';
  */
 export function buildMorphology(morphology: Morphology, rng: () => number): THREE.Group {
   switch (morphology) {
+    // 暫定フォールバック: 角柱と同一ジオメトリ(Phase 2 ステップ3で本実装に差し替え)
+    case '砲弾集合':
     case '角柱': {
       const geo = new THREE.CylinderGeometry(0.4, 0.4, 1.5, 6);
       const baseMat = new THREE.MeshStandardMaterial({ color: COLORS.base, flatShading: true });
@@ -215,6 +217,8 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
       return group;
     }
 
+    // 暫定フォールバック: 厚角板と同一ジオメトリ(Phase 2 ステップ3で本実装に差し替え)
+    case '側面':
     case '厚角板': {
       const geo = new THREE.CylinderGeometry(0.6, 0.6, 0.4, 6);
       const mat = new THREE.MeshStandardMaterial({

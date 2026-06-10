@@ -1,7 +1,7 @@
 import type { Morphology } from '../types';
 import type { ConditionDiagram, DiagramRegion, MlCode } from './types';
 import { waterSaturationExcessDensity } from './saturation';
-import { NAKAYA_V1 } from './nakaya-v1';
+import { ML66 } from './ml66';
 
 export interface RegionHit {
   region: DiagramRegion;
@@ -18,12 +18,13 @@ export interface RegionHit {
  * - 下から順に 値 ≤ sTop(T) を満たす最初の段。sTop(T) は tMax 端→tMin 端の線形補間。
  *   境界は下側所属(≤、v1 の規約と一致)。最上段は sTop なし=∞。
  *
- * `diagram` の既定値は現状 NAKAYA_V1(実装ステップ2で ML66 既定へ切替予定、設計書 §8)。
+ * `diagram` の既定値は ML66(v2 の既定、設計書 §8)。v1 挙動は
+ * `classifyOnDiagram(t, v, NAKAYA_V1)` で明示的に得られる。
  */
 export function classifyOnDiagram(
   tempC: number,
   vapor: number,
-  diagram: ConditionDiagram = NAKAYA_V1,
+  diagram: ConditionDiagram = ML66,
 ): RegionHit {
   const [tMin, tMax] = diagram.tDomain;
   const t = Math.min(Math.max(tempC, tMin), tMax);

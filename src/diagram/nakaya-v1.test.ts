@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { NAKAYA_V1 } from './nakaya-v1';
-import { getCrystalType } from '../classify';
+import { classifyOnDiagram } from './lookup';
 import type { Morphology } from '../types';
+
+// ステップ2で getCrystalType の既定が ML66 へ切り替わったため、
+// v1 回帰は NAKAYA_V1 を明示指定して比較する(設計書 §9-4)。
+const nakayaV1 = (t: number, v: number): Morphology =>
+  classifyOnDiagram(t, v, NAKAYA_V1).morphology;
 
 /**
  * 旧実装(v1 の if-else)の oracle 移植。
@@ -39,7 +44,7 @@ describe('NAKAYA_V1 回帰(挙動不変)', () => {
         const v = j * 0.005;
         points++;
         const expected = legacyGetCrystalType(t, v);
-        const actual = getCrystalType(t, v);
+        const actual = nakayaV1(t, v);
         if (actual !== expected) {
           mismatches.push(`(${t}, ${v}): expected ${expected}, got ${actual}`);
         }
@@ -73,7 +78,7 @@ describe('NAKAYA_V1 回帰(挙動不変)', () => {
       [-40, 0.25, 'さや'],
     ];
     for (const [t, v, expected] of cases) {
-      expect(getCrystalType(t, v), `(${t}, ${v})`).toBe(expected);
+      expect(nakayaV1(t, v), `(${t}, ${v})`).toBe(expected);
     }
   });
 });

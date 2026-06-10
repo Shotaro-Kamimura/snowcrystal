@@ -4,9 +4,23 @@ All notable changes to **snowcrystal** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] — targeting 0.2.0
+
+### Changed
+- **Default classification switched** from the v1 Nakaya thresholds to a dataset
+  digitized from Magono & Lee (1966) Fig. 2 (`ML66`), via a new declarative
+  condition-diagram module (`classifyOnDiagram`, schema types, Murphy & Koop 2005
+  saturation curve; internal relative-saturation axis s = ρ/ρ_ws(T) with s=1 at
+  water saturation). The v1 behavior remains available explicitly as
+  `classifyOnDiagram(t, v, NAKAYA_V1)`.
+- **BREAKING (planned for 0.2.0)**: the `Morphology` union expanded with
+  '砲弾集合' and '側面' — consumer code with exhaustive switches over
+  `Morphology` must be updated.
 
 ### Added
+- New morphologies **砲弾集合** (combination of bullets, ML66 C2a) and **側面**
+  (side planes, ML66 S1/S2) — classification only for now; rendering falls back
+  to the 角柱 / 厚角板 geometry until the dedicated geometry lands (Phase 2 step 3).
 - Internal `crystallography` module (THREE-independent pure functions): `A_AXES`
   basal-plane a-axis basis and `elongatedHexOutline` ({10-10}-consistent elongated
   hexagon), with automated vitest checks for 120° interior angles, 60°-family edge

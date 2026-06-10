@@ -23,6 +23,8 @@ const LABELS: Record<Morphology, { ja: string; en: string }> = {
   骸晶角板: { ja: '骸晶角板', en: 'Skeleton Plate' },
   扇形: { ja: '扇形', en: 'Sector' },
   樹枝状: { ja: '樹枝状', en: 'Dendrite' },
+  砲弾集合: { ja: '砲弾集合', en: 'Combination of Bullets' },
+  側面: { ja: '側面', en: 'Side Planes' },
 };
 
 // Global-classification lineage per code (mirrors FULL_SUBTYPE_MAP for display).

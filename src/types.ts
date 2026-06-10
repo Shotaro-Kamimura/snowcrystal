@@ -1,4 +1,4 @@
-/** The nine supported snow-crystal morphologies (primary generation key). */
+/** The supported snow-crystal morphologies (primary generation key). */
 export type Morphology =
   | '角板'
   | '角柱'
@@ -8,7 +8,9 @@ export type Morphology =
   | '厚角板'
   | '骸晶角板'
   | '扇形'
-  | '樹枝状';
+  | '樹枝状'
+  | '砲弾集合'
+  | '側面';
 
 export interface CrystalParams {
   /** Primary generation key (9 types). */
