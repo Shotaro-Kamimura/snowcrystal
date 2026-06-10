@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dendrite side-branch shape: kite prisms (non-parallel sides) replaced with
   elongated hexagons — parallel sides, all interior angles 120°, base vertex
   flush on the main-branch face.
+- Sector plate (扇形) petals: kite prisms replaced with elongated hexagons —
+  outer tip angle 90° → 120°, parallel sides, base vertex inside the center
+  column (zero gap); tip radius 1.52 keeps the v1 outline.
 
 ## [0.1.0] — Unreleased (initial public release)
 
