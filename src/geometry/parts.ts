@@ -203,7 +203,7 @@ export function createBranchWithChildren(angleRad: number): THREE.Group {
   // 副枝の数と間隔
   const sideCount = 3;
   const spacing = 0.5;
-  const offsetX = 0.3;
+  const offsetX = 0.18; // 基部（下側先端 0.2）が主枝（半幅 0.04）に食い込む距離
 
   for (let i = 0; i < sideCount; i++) {
     const offsetZ = spacing * (i + 1.5);
@@ -212,13 +212,14 @@ export function createBranchWithChildren(angleRad: number): THREE.Group {
     const petalL = createMiniDiamondPrism();
     const petalR = createMiniDiamondPrism();
 
-    // 主枝にピタッと接するようにXZ平面上に寝かせ、鋭角を内向きに
+    // XZ平面上に寝かせ、鋭角の先端を主枝の先端側（外向き）へ±60°で開く
+    // （結晶学的に副枝は隣接a軸に平行 = 主枝に対し±60°、開き120°）
     petalL.rotation.x = Math.PI / 2;
-    petalL.rotation.z = Math.PI / 4 + Math.PI; // = 5π/4
+    petalL.rotation.z = Math.PI / 3; // 先端方向 (-sin60°, 0, +cos60°)
     petalL.position.set(-offsetX, 0, offsetZ);
 
     petalR.rotation.x = Math.PI / 2;
-    petalR.rotation.z = -Math.PI / 4 + Math.PI; // = 3π/4
+    petalR.rotation.z = -Math.PI / 3; // 先端方向 (+sin60°, 0, +cos60°)
     petalR.position.set(offsetX, 0, offsetZ);
 
     group.add(petalL, petalR);

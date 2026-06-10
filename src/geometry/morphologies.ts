@@ -87,7 +87,7 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
 
       const numPetals = 6;
       const radius = 1.1;
-      const tilt = -Math.PI / 2; // -45度で倒す
+      const tilt = -Math.PI / 2; // -90度で倒す（XZ平面に寝かせる）
 
       for (let i = 0; i < numPetals; i++) {
         const angle = (i * Math.PI) / 3;
