@@ -4,6 +4,46 @@ All notable changes to **snowcrystal** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — feature/phase3] — targeting 0.3.0
+
+Branch-local section (design doc §6): folds into the 0.3.0 notes when this
+branch is merged after the 0.2.0 release. The 0.2.0 section below stays frozen.
+
+### Added (internal)
+- `src/growth/` — growth-path (environmental-history) module, the phase 3a MVP
+  of docs/phase3-growth-path-design.md: `GrowthStage` / `GrowthPath` 2-stage
+  data model, `RegionClass` mapping covering all 17 ML66 regions
+  (vitest-enforced), data-driven `COMPOSITE_TABLE` (6 rows: CP1a / CP1b /
+  P2a/P2c / P2f/P2g / CP3 ×2), and `classifyGrowthPath(path)` → `PathHit`.
+- `createCappedColumn(seed?)` capped-column geometry (ML66 CP1a 冠柱, Table 1):
+  hexagonal column + two end plates sharing the c axis; children in fixed
+  order [column, top cap, bottom cap] with `userData.part: 'column' | 'cap'`
+  and per-mesh materials.
+- `renderGrowthPath(path, seed?)` dispatcher: the capped column for the CP1a
+  geometric composite, otherwise delegates to `createSnowCrystal` with the
+  final stage's morphology; stores its `PathHit` in `group.userData.pathHit`.
+- **None of this is exported from `src/index.ts`** — with `exports` limited to
+  `"."`, the growth module is invisible to npm consumers (dist byte-identical,
+  MD5-verified per gate); promotion to the public surface is a 0.3.0 decision.
+
+### Added (playground)
+- Growth-path mode as a third input mode (sliders / manual / growth path):
+  click the condition diagram to place stage ① (open ○) then ② (filled ●),
+  joined by a ①→② gradient arrow; both points are drag-movable, and clicking
+  a point selects the stage the two existing sliders are bound to (no new
+  sliders added).
+- Stage colors ① #5DCAA5 / ② #85B7EB on the diagram points/arrow and on the
+  capped column (column = ① / caps = ② via `userData.part`). Delegated
+  renders stay uncolored — adopted: stage colors are reserved for part-level
+  growth attribution, and the only geometric composite in 3a is the capped
+  column.
+- Info panel: stage ①/② rows (morphology / region) plus a composite row in
+  three forms — geometric with the source field shown in full (「複合型:
+  冠柱 (CP1a) — ML66 Table 1 + 標準解釈(柱→板)」, adopted over the abbreviated
+  form), classification-only (「専用描画なし — 最終条件の形態で表示」), or
+  「複合型: —」. Growth imports are deep imports from `src/growth/`,
+  header-commented as 3a-temporary (public surface in 0.3.0).
+
 ## [Unreleased] — targeting 0.2.0
 
 ### Changed
