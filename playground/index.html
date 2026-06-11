@@ -115,6 +115,24 @@
         color: var(--text);
       }
 
+      /* 広幅枝 2 案比較トグル(案 K K-a)— 小型の mode-switch。広幅枝表示時のみ有効 */
+      .mode-switch.mini {
+        margin: 0;
+        flex: 0 0 auto;
+        padding: 2px;
+      }
+
+      .mode-switch.mini button {
+        flex: 0 0 auto;
+        font-size: 10.5px;
+        padding: 3px 9px;
+      }
+
+      .mode-switch button:disabled {
+        cursor: not-allowed;
+        opacity: 0.4;
+      }
+
       .field {
         margin: 14px 0 0;
       }
@@ -259,6 +277,28 @@
         font-size: 26px;
         font-weight: 680;
         line-height: 1.15;
+      }
+
+      /* 仮 / provisional バッジ(案 K §2.2)— 薄い琥珀系・小フォント・控えめ。
+         3D キャンバス上には出さず情報パネルのみ。ホバー(title)で「何が仮か」 */
+      .prov-badge {
+        display: inline-block;
+        margin-right: 8px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        vertical-align: 0.5em;
+        color: #ffd79a;
+        background: rgba(255, 184, 107, 0.12);
+        border: 1px solid rgba(255, 184, 107, 0.35);
+        cursor: help;
+        white-space: nowrap;
+      }
+
+      .prov-badge[hidden] {
+        display: none;
       }
 
       #info .morph-en {
@@ -497,6 +537,7 @@
             <option value="星状">星状 / Stellar Crystal</option>
             <option value="羊歯">羊歯 / Fernlike Crystal</option>
             <option value="扇形">扇形 / Sector</option>
+            <option value="広幅枝">広幅枝（仮） / Broad Branches</option>
             <option value="角板">角板 / Plate</option>
             <option value="厚角板">厚角板 / Thick Plate</option>
             <option value="骸晶角板">骸晶角板 / Skeleton Plate</option>
@@ -508,6 +549,16 @@
             <option value="砲弾集合">砲弾集合 / Bullet Rosette</option>
             <option value="側面">側面 / Side Planes</option>
           </select>
+        </div>
+
+        <!-- 広幅枝(P1c)の 2 案比較トグル(案 K K-a)。広幅枝表示時のみ有効・既定 = 案 1。
+             9 月専門家確認 (1)「この 2 案のどちらですか」を画面で並べるための仮実装 UI -->
+        <div class="check-row" id="broad-variant-row">
+          <label>広幅枝 2 案 / P1c variant</label>
+          <div class="mode-switch mini" id="broad-variant">
+            <button type="button" data-variant="1" class="active" disabled>案 1 平行</button>
+            <button type="button" data-variant="2" disabled>案 2 拡幅</button>
+          </div>
         </div>
 
         <!-- 結晶学注記レイヤー(案 N)。既定 OFF(裁量 4)・パスモード中 disabled(裁量 2) -->
@@ -527,7 +578,14 @@
 
       <!-- ④ live morphology / classification -->
       <section class="panel" id="info">
-        <div class="morph-ja" id="morph-ja">樹枝状</div>
+        <!-- 仮バッジ(案 K §2.2): 表示中 region の source 接頭辞 'provisional: ' から
+             main.ts が導出(ハードコード表なし)。title 属性に「何が仮か」(suffix) -->
+        <div class="morph-ja">
+          <span id="prov-badge" class="prov-badge" hidden>仮 / provisional</span><span
+            id="morph-ja"
+            >樹枝状</span
+          >
+        </div>
         <div class="morph-en" id="morph-en">Dendrite</div>
         <div class="code" id="global-code">P4g</div>
         <div class="code-label">Global Classification</div>

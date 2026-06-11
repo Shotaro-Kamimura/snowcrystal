@@ -3,12 +3,18 @@ import { THREE } from '../three';
 import { COLORS } from '../classify';
 import {
   buildMorphology,
+  buildBroadBranchPlan1,
+  buildBroadBranchPlan2,
+  BROAD_BRANCH_PARALLEL_PARAMS,
+  BROAD_BRANCH_HEX_PETAL_PARAMS,
   DENT_DIMS,
+  SECTOR_PETAL_DEFAULTS,
   STELLAR_ARM_PARAMS,
   FERNLIKE_ARM_PARAMS,
   LONG_COLUMN_DIMS,
 } from './morphologies';
 import { dentedHexOutline } from './hexOutlineBuilder';
+import { elongatedHexOutline } from './crystallography';
 import { DENDRITE_ARM_DEFAULTS } from './parts';
 import { mulberry32 } from '../random';
 
@@ -386,5 +392,124 @@ describe('案M 形態系 — 星状・羊歯・長柱(設計書 §5)', () => {
       const b = shapeSignature(buildMorphology(t, mulberry32(7)));
       expect(a).toBe(b);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// 案 K(CP-K2)— 広幅枝(P1c 仮実装)・扇形族(設計書 §3.2)
+// ─────────────────────────────────────────────────────────────────────────
+
+/** 扇形族の花弁(ExtrudeGeometry メッシュ)を取り出す(中心 Cylinder は除外)。 */
+function petalsOf(group: THREE.Group): THREE.Mesh[] {
+  return meshesOf(group).filter((m) => m.geometry.type === 'ExtrudeGeometry');
+}
+
+/**
+ * 花弁のローカル頂点が「(x, y) = アウトライン頂点のいずれか・z = ±thickness/2」に
+ * 一致し、アウトライン 6 点をすべて使うことを検証(花弁は mesh の rotation で
+ * 立てるため、ジオメトリ自体は extrudePrism のローカル系のまま)。
+ */
+function expectPetalMatchesOutline(
+  mesh: THREE.Mesh,
+  outline: Array<[number, number]>,
+  thickness: number,
+): void {
+  const pos = mesh.geometry.getAttribute('position');
+  const tol = 1e-5; // BufferAttribute は Float32
+  const used = new Set<number>();
+  for (let i = 0; i < pos.count; i++) {
+    expect(Math.abs(Math.abs(pos.getZ(i)) - thickness / 2)).toBeLessThan(tol);
+    const idx = outline.findIndex(
+      ([ox, oy]) => Math.hypot(pos.getX(i) - ox, pos.getY(i) - oy) < tol,
+    );
+    expect(idx).toBeGreaterThanOrEqual(0);
+    used.add(idx);
+  }
+  expect(used.size).toBe(outline.length);
+}
+
+/** 扇形族の共通構造: 中心 1 + 花弁 6(30° + k·60°・基部半径・指定アウトライン)。 */
+function expectSectorFamily(
+  group: THREE.Group,
+  outline: Array<[number, number]>,
+  thickness: number,
+  baseRadius: number,
+): void {
+  expectDendriteCenter(group); // 中心六角柱(0.5/0.2・COLORS.base)は樹枝状族と共通寸法
+  const petals = petalsOf(group);
+  expect(petals).toHaveLength(6);
+  expect(meshesOf(group)).toHaveLength(1 + 6);
+  petals.forEach((petal, i) => {
+    const angle = (i * Math.PI) / 3 + Math.PI / 6; // a 軸整合(Cylinder 族 30° 位相)
+    expect(petal.rotation.x).toBeCloseTo(Math.PI / 2, 12);
+    expect(petal.rotation.z).toBeCloseTo(angle - Math.PI / 2, 12);
+    expect(petal.position.x).toBeCloseTo(baseRadius * Math.cos(angle), 12);
+    expect(petal.position.y).toBe(0);
+    expect(petal.position.z).toBeCloseTo(baseRadius * Math.sin(angle), 12);
+    expectPetalMatchesOutline(petal, outline, thickness);
+  });
+}
+
+/** 第 1 花弁のローカル頂点列(Float32 配列)— 案 1/案 2/扇形の頂点レベル比較用。 */
+function firstPetalVerts(group: THREE.Group): number[] {
+  return Array.from(petalsOf(group)[0].geometry.getAttribute('position').array as Float32Array);
+}
+
+describe('案K 形態系 — 広幅枝・扇形族(設計書 §3.2)', () => {
+  it('m. 扇形ビット不変: SECTOR_PETAL_DEFAULTS が現行値リテラルと一致 + 構造署名(中心 1 + 花弁 6・幅 0.5・基部 0.42)', () => {
+    // 値の変更は見た目回帰(DENDRITE_ARM_DEFAULTS と同方式のリテラル固定)。
+    // 族化前後のフルメッシュ署名一致は CP-K2 ゲートで機械確認済(停止 1 報告)
+    expect(SECTOR_PETAL_DEFAULTS).toEqual({
+      petalWidth: 0.5,
+      petalLength: 1.1,
+      petalThickness: 0.1,
+      baseRadius: 0.42,
+    });
+    const sector = buildMorphology('扇形', mulberry32(42));
+    expectSectorFamily(sector, elongatedHexOutline(0.5, 1.1), 0.1, 0.42);
+  });
+
+  it('n. 広幅枝 案 1(平行広幅)= 既定: 幅 0.75 のみの差分・既定ビルダーは案 1 と頂点同一', () => {
+    expect(BROAD_BRANCH_PARALLEL_PARAMS).toEqual({ petalWidth: 0.75 }); // 長さ・基部は据え置き(§3.2)
+    const broad = buildMorphology('広幅枝', mulberry32(42));
+    expectSectorFamily(broad, elongatedHexOutline(0.75, 1.1), 0.1, 0.42);
+
+    // 既定 = 案 1(v1 以来の現行解釈との連続性)。案 2 とは花弁頂点が異なる
+    expect(firstPetalVerts(broad)).toEqual(firstPetalVerts(buildBroadBranchPlan1()));
+    expect(firstPetalVerts(broad)).not.toEqual(firstPetalVerts(buildBroadBranchPlan2()));
+  });
+
+  it('o. 広幅枝 案 2(拡幅・頂点接続六角形花弁): 全辺長 R_p の正六角形・基部 0.48・隣接花弁の非交差', () => {
+    const R = 0.46;
+    expect(BROAD_BRANCH_HEX_PETAL_PARAMS).toEqual({
+      petalWidth: Math.sqrt(3) * R,
+      petalLength: 2 * R,
+      baseRadius: 0.48,
+    });
+
+    // 構成的検証: width = √3·R_p・length = 2·R_p の伸長六角形は全辺長 R_p の正六角形
+    // (全内角 120° は辺長均一と凸性から従う — {10-1̄0} 整合・120° 先端)
+    const outline = elongatedHexOutline(Math.sqrt(3) * R, 2 * R);
+    expect(outline).toHaveLength(6);
+    for (let i = 0; i < 6; i++) {
+      const [x1, y1] = outline[i];
+      const [x2, y2] = outline[(i + 1) % 6];
+      expect(Math.hypot(x2 - x1, y2 - y1), `edge ${i}`).toBeCloseTo(R, 12);
+    }
+
+    const plan2 = buildBroadBranchPlan2();
+    expectSectorFamily(plan2, outline, 0.1, 0.48);
+
+    // 先端半径 = 0.48 + 2R = 1.40、側方頂点の方位角 < 30° で隣接花弁と重ならない(§3.2)
+    expect(0.48 + 2 * R).toBeCloseTo(1.4, 12);
+    expect(Math.atan2((Math.sqrt(3) * R) / 2, 0.48 + R / 2)).toBeLessThan(Math.PI / 6);
+  });
+
+  it('p. 広幅枝: dispose 正常・決定性(rng 非消費 — seed 非依存で同一形状)', () => {
+    expect(() => disposeGroup(buildMorphology('広幅枝', mulberry32(7)))).not.toThrow();
+    expect(() => disposeGroup(buildBroadBranchPlan2())).not.toThrow();
+    expect(shapeSignature(buildMorphology('広幅枝', mulberry32(7)))).toBe(
+      shapeSignature(buildMorphology('広幅枝', mulberry32(8))),
+    );
   });
 });

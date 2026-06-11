@@ -42,6 +42,118 @@ export const FERNLIKE_ARM_PARAMS: DendriteArmOptions = {
 export const LONG_COLUMN_DIMS = { radius: 0.25, height: 2.0 } as const;
 
 /**
+ * 扇形族(扇形・広幅枝)の花弁パラメタ(案 K 設計書 §3.2)。省略時は
+ * SECTOR_PETAL_DEFAULTS(現行扇形の採用値 — 出力ビット不変の基準。
+ * DENDRITE_ARM_DEFAULTS と同じくリテラル固定テストで退行を検知する)。
+ */
+export interface SectorPetalOptions {
+  /** 花弁幅(elongatedHexOutline の width) */
+  petalWidth?: number;
+  /** 花弁長(基部頂点 → 先端頂点) */
+  petalLength?: number;
+  /** 花弁厚 */
+  petalThickness?: number;
+  /** 基部頂点の半径(中心柱への埋め込み量を決める) */
+  baseRadius?: number;
+}
+
+/**
+ * 現行の扇形(P1b)の花弁パラメタ(v1 由来の採用値そのまま)。
+ * 扇形の出力ビット不変の基準値(案 K 設計書 §3.2 — DENDRITE_ARM_DEFAULTS 方式)。
+ * 案 K 内部 API — src/index.ts には export しない。
+ */
+export const SECTOR_PETAL_DEFAULTS = {
+  petalWidth: 0.5,
+  petalLength: 1.1,
+  petalThickness: 0.1,
+  baseRadius: 0.42,
+} as const;
+
+/**
+ * 広幅枝(P1c)案 1 = 平行広幅(案 K 設計書 §3.2)。扇形のパラメタ族:
+ * 花弁幅のみ 0.5 → 0.75(長さ・基部半径は据え置き)。花弁間の隙間が狭まり
+ * 「広幅の枝」が立つ。伸長六角形のまま {10-1̄0} 整合は構成的に維持。
+ * 基部付近(r < 0.75)で隣接花弁が同一平面で重なるが、同材質・同法線
+ * (COLORS.wing・上面 +Y)のため視覚上は連続面になる(目視確定は CP-K2 停止 2)。
+ */
+export const BROAD_BRANCH_PARALLEL_PARAMS: SectorPetalOptions = {
+  petalWidth: 0.75,
+};
+
+/** 広幅枝 案 2 の正六角形花弁の外接半径 R_p(採用値の根拠は下記定数コメント)。 */
+const BROAD_BRANCH_HEX_R = 0.46;
+
+/**
+ * 広幅枝(P1c)案 2 = 拡幅(頂点接続六角形花弁)(案 K 設計書 §3.2)。
+ * 正六角形板(外接半径 R_p)を頂点で中心ハブに接続: elongatedHexOutline は
+ * width = √3·R_p・length = 2·R_p のとき全辺長 R_p の正六角形になる(全内角 120°・
+ * 中心側頂点から中央で最大幅 √3·R_p まで拡幅 → 120° 先端へ先細り、が構成的に成立)。
+ * 花弁軸 = a 軸(30° + k·60°)で頂点方位 = 軸 + k·60° — Cylinder 族(R2)と格子整合。
+ * baseRadius 0.48: 中心柱の角頂点(0.5)の 0.02 内側へ埋め込み(隙間ゼロ保証 —
+ * 扇形の 0.42 と同じ流儀)。側方頂点の方位角 atan(√3R_p/2 / (0.48 + R_p/2)) ≈ 29.3°
+ * < 30° のため隣接花弁とは重ならない(R_p > baseRadius だと 30° を超え交差する)。
+ */
+export const BROAD_BRANCH_HEX_PETAL_PARAMS: SectorPetalOptions = {
+  petalWidth: Math.sqrt(3) * BROAD_BRANCH_HEX_R,
+  petalLength: 2 * BROAD_BRANCH_HEX_R,
+  baseRadius: 0.48,
+};
+
+/**
+ * 扇形族の共通ビルド: 中心六角柱(0.5/0.2)+ 花弁 6 枚(30° + k·60° = a 軸整合)。
+ * 構成・生成順・演算順は旧 '扇形' case と同一(デフォルトマージのみ —
+ * 扇形はビット同一、案 K 設計書 §3.2。樹枝状の createBranchWithChildren と同方式)。
+ */
+function buildSectorFamily(opts: SectorPetalOptions = {}): THREE.Group {
+  const p = { ...SECTOR_PETAL_DEFAULTS, ...opts };
+  const group = new THREE.Group();
+
+  // 中心の六角柱
+  const centerGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.2, 6);
+  const centerMat = new THREE.MeshStandardMaterial({ color: COLORS.base });
+  const centerMesh = new THREE.Mesh(centerGeo, centerMat);
+  group.add(centerMesh);
+
+  const numPetals = 6;
+  // 基部頂点の半径。既定 0.42 は中心柱の内接半径 0.5·cos30° ≈ 0.433 より内側で隙間ゼロを保証
+  const baseRadius = p.baseRadius;
+
+  for (let i = 0; i < numPetals; i++) {
+    // +30°位相: CylinderGeometry(6分割)の頂点方位（30° mod 60°）= a軸〈11-20〉に整合
+    const angle = (i * Math.PI) / 3 + Math.PI / 6;
+
+    // 伸長六角形プリズムの花弁（全内角120°・対辺平行）。先端は半径 baseRadius + petalLength
+    const petal = createElongatedHexPrism(p.petalWidth, p.petalLength, p.petalThickness);
+
+    // XZ平面に寝かせ（厚み中心 y=0）、長軸の先端を放射方向外向きへ
+    petal.rotation.x = Math.PI / 2;
+    petal.rotation.z = angle - Math.PI / 2; // 長軸 +Y → (cosθ, 0, sinθ)
+    petal.position.set(baseRadius * Math.cos(angle), 0, baseRadius * Math.sin(angle));
+
+    group.add(petal);
+  }
+  return group;
+}
+
+/**
+ * 広幅枝 案 1(平行広幅)の内部ビルダー。buildMorphology('広幅枝') の既定。
+ * 案 K 内部 API — src/index.ts には export しない(K2 申し送り:
+ * variant 切替は公開 API に出さず、playground から深 import で利用する)。
+ */
+export function buildBroadBranchPlan1(): THREE.Group {
+  return buildSectorFamily(BROAD_BRANCH_PARALLEL_PARAMS);
+}
+
+/**
+ * 広幅枝 案 2(拡幅・頂点接続六角形花弁)の内部ビルダー。9 月専門家確認 (1) の
+ * 比較表示用に playground の比較トグルから深 import で呼ぶ(案 K 設計書 §3.2)。
+ * 公開 API には出さない(同上)。
+ */
+export function buildBroadBranchPlan2(): THREE.Group {
+  return buildSectorFamily(BROAD_BRANCH_HEX_PETAL_PARAMS);
+}
+
+/**
  * 樹枝状族(星状・羊歯)の共通ビルド: 中心六角柱(0.5/0.2)+ 腕 6 本(60° 間隔)。
  * '樹枝状' case は出力ビット不変の基準(設計書 §3.1)のため本ヘルパーへ寄せず無変更。
  */
@@ -186,33 +298,17 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
     }
 
     case '扇形': {
-      const group = new THREE.Group();
+      // 扇形(ML66 P1b)— 扇形族の基準値(SECTOR_PETAL_DEFAULTS。先端 0.42 + 1.1 = 1.52)。
+      // 出力は族化前とビット同一(案 K 設計書 §3.2、フルメッシュ署名で機械確認)
+      return buildSectorFamily();
+    }
 
-      // 中心の六角柱
-      const centerGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.2, 6);
-      const centerMat = new THREE.MeshStandardMaterial({ color: COLORS.base });
-      const centerMesh = new THREE.Mesh(centerGeo, centerMat);
-      group.add(centerMesh);
-
-      const numPetals = 6;
-      // 基部頂点の半径。中心柱の内接半径 0.5·cos30° ≈ 0.433 より内側に置き、隙間ゼロを保証
-      const baseRadius = 0.42;
-
-      for (let i = 0; i < numPetals; i++) {
-        // +30°位相: CylinderGeometry(6分割)の頂点方位（30° mod 60°）= a軸〈11-20〉に整合
-        const angle = (i * Math.PI) / 3 + Math.PI / 6;
-
-        // 伸長六角形プリズムの花弁（全内角120°・対辺平行）。先端は半径 0.42 + 1.1 = 1.52
-        const petal = createElongatedHexPrism(0.5, 1.1, 0.1);
-
-        // XZ平面に寝かせ（厚み中心 y=0）、長軸の先端を放射方向外向きへ
-        petal.rotation.x = Math.PI / 2;
-        petal.rotation.z = angle - Math.PI / 2; // 長軸 +Y → (cosθ, 0, sinθ)
-        petal.position.set(baseRadius * Math.cos(angle), 0, baseRadius * Math.sin(angle));
-
-        group.add(petal);
-      }
-      return group;
+    case '広幅枝': {
+      // 広幅枝(ML66 P1c、crystal with broad branches)— 仮実装(provisional)。
+      // 既定 = 案 1(平行広幅: v1 以来の現行解釈との連続性)。案 2(拡幅六角花弁)は
+      // buildBroadBranchPlan2 を playground の比較トグルから深 import(K2 申し送り —
+      // variant 切替は公開 API に出さない)。9 月専門家確認 (1) で確定
+      return buildBroadBranchPlan1();
     }
 
     case '樹枝状': {

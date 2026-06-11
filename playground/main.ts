@@ -18,6 +18,8 @@ import {
 import { renderGrowthPath } from '../src/growth/renderGrowthPath'; // 3a 暫定(深い import、冒頭コメント参照)
 import type { GrowthStage, PathHit } from '../src/growth/types'; // 3a 暫定(同上)
 import { dentedHexOutline } from '../src/geometry/hexOutlineBuilder'; // 案 N: 240° 弧の頂点計算(純関数・表示専用)
+import { buildBroadBranchPlan2 } from '../src/geometry/morphologies'; // 案 K K-a: 広幅枝 案 2(internal — K2 申し送りどおり公開 API に出さない)
+import { provisionalSuffix } from '../src/diagram/provisional'; // 案 K §2.1: 仮フラグ('provisional: ' 接頭辞)のパーサ
 import {
   ANNOTATIONS,
   PYRAMID_FACE_ANGLE_FROM_AXIS_RAD,
@@ -41,6 +43,7 @@ const LABELS: Record<Morphology, { ja: string; en: string }> = {
   厚角板: { ja: '厚角板', en: 'Thick Solid Plate' },
   骸晶角板: { ja: '骸晶角板', en: 'Skeleton Plate' },
   扇形: { ja: '扇形', en: 'Sector' },
+  広幅枝: { ja: '広幅枝', en: 'Broad Branches' },
   樹枝状: { ja: '樹枝状', en: 'Dendrite' },
   砲弾集合: { ja: '砲弾集合', en: 'Combination of Bullets' },
   側面: { ja: '側面', en: 'Side Planes' },
@@ -155,7 +158,11 @@ const modeTag = document.getElementById('mode-tag') as HTMLElement;
 const modeSwitch = document.getElementById('mode-switch') as HTMLElement;
 const modeButtons = Array.from(modeSwitch.querySelectorAll('button'));
 const annotToggle = document.getElementById('annot-toggle') as HTMLInputElement;
+const broadVariantButtons = Array.from(
+  (document.getElementById('broad-variant') as HTMLElement).querySelectorAll('button'),
+);
 
+const provBadge = document.getElementById('prov-badge') as HTMLElement;
 const morphJa = document.getElementById('morph-ja') as HTMLElement;
 const morphEn = document.getElementById('morph-en') as HTMLElement;
 const globalCode = document.getElementById('global-code') as HTMLElement;
@@ -182,6 +189,10 @@ let currentMorph: Morphology = '樹枝状';
 const pathStages: [GrowthStage | null, GrowthStage | null] = [null, null];
 let selectedStage: 0 | 1 = 0; // スライダー 2 本が束ねられる「選択中ステージ」
 let draggingStage: 0 | 1 | null = null;
+
+// 広幅枝(P1c)2 案比較トグルの状態(案 K K-a)。既定 = 案 1(ライブラリ既定と同じ)。
+// 案 2 は internal ビルダーの深い import で差し替える — 広幅枝表示時のみ有効
+let broadVariant: 1 | 2 = 1;
 
 /** Slider is 0..40 (positive); temperature is the negative of that. */
 function readTemp(): number {
@@ -210,17 +221,28 @@ function rebuild(): void {
     // 点が未設置の間は直前の結晶を保持する
   } else if (mode === 'manual' && morphologySelect.value) {
     currentMorph = morphologySelect.value as Morphology;
-    swap(createSnowCrystal({ morphology: currentMorph }));
+    swap(buildCrystal({ morphology: currentMorph }));
   } else {
     const temp = readTemp();
     const vapor = readVapor();
     currentMorph = getCrystalType(temp, vapor);
-    swap(createSnowCrystal({ temperature: temp, supersaturation: vapor }));
+    swap(buildCrystal({ temperature: temp, supersaturation: vapor }));
   }
 
   updateInfo();
+  updateBroadVariantUI();
   drawNakaya();
   updateAnnotations(); // swap 後の再構築フック(案 N — パスモードでは disabled/非表示)
+}
+
+/**
+ * 結晶ビルド(比較トグル対応): 広幅枝を表示中でトグルが案 2 のときのみ
+ * internal ビルダーへ差し替える。それ以外は従来どおり createSnowCrystal
+ * (= 案 1 がライブラリ既定)。currentMorph は呼び出し前に確定していること。
+ */
+function buildCrystal(params: Parameters<typeof createSnowCrystal>[0]): THREE.Group {
+  if (broadVariant === 2 && currentMorph === '広幅枝') return buildBroadBranchPlan2();
+  return createSnowCrystal(params);
 }
 
 /**
@@ -591,6 +613,37 @@ annotToggle.addEventListener('change', updateAnnotations);
 // ─────────────────────────────────────────────────────────────────────────
 // Info panel
 // ─────────────────────────────────────────────────────────────────────────
+/**
+ * 仮バッジ(案 K §2.2)。判定は ML66 データセットの source 接頭辞 'provisional: '
+ * からの導出のみで、playground 側に仮形態のハードコード表を持たない(単一情報源)。
+ * suffix(何が仮か)は title 属性(ホバー)で示す。3D キャンバス上には出さない。
+ */
+function renderProvBadge(suffix: string | null): void {
+  provBadge.hidden = suffix === null;
+  if (suffix !== null) {
+    provBadge.title = `仮実装: ${suffix} — 9 月専門家確認待ち / Provisional — pending expert review`;
+  }
+}
+
+/** 手動モード用: 形態に対応する ML66 領域から仮 suffix を引く(該当なしは null)。 */
+function provisionalSuffixForMorph(morph: Morphology): string | null {
+  for (const region of Object.values(ML66.regions)) {
+    if (region.morphology !== morph) continue;
+    const suffix = provisionalSuffix(region.source);
+    if (suffix !== null) return suffix;
+  }
+  return null;
+}
+
+/** 広幅枝 2 案トグルの有効/無効と選択ハイライト(広幅枝表示時のみ有効)。 */
+function updateBroadVariantUI(): void {
+  const enabled = currentMorph === '広幅枝' && mode !== 'path';
+  for (const btn of broadVariantButtons) {
+    btn.disabled = !enabled;
+    btn.classList.toggle('active', Number(btn.dataset.variant) === broadVariant);
+  }
+}
+
 function renderHierarchy(lines: string[]): void {
   hierarchyEl.innerHTML = lines
     .map((line, i) => (i === lines.length - 1 ? `<div class="cur">${line}</div>` : `<div>${line}</div>`))
@@ -620,14 +673,17 @@ function updateInfo(): void {
       ? '入力: 形態を直接選択（気温・水蒸気量は無視）'
       : '入力: 気温・水蒸気量（スライダー連動）';
 
-  // スライダーモード時のみ ML66 領域を表示（形態タイトル・Global 欄は不変）
+  // スライダーモード時のみ ML66 領域を表示（形態タイトル・Global 欄は不変）。
+  // 仮バッジ: climate は表示中 region の source から、manual は形態の対応 region から導出
   if (mode === 'climate') {
     const hit = classifyOnDiagram(readTemp(), readVapor(), ML66);
     regionLine.textContent = `領域 / Region: ${hit.region.labelJa} (${hit.mlCode ?? '—'})`;
     regionLine.style.display = '';
+    renderProvBadge(provisionalSuffix(hit.region.source));
   } else {
     regionLine.textContent = '';
     regionLine.style.display = 'none';
+    renderProvBadge(provisionalSuffixForMorph(currentMorph));
   }
 }
 
@@ -675,6 +731,7 @@ function updatePathInfo(): void {
     morphEn.textContent = 'Column with plates'; // ML66 Table 1 の英名
     globalCode.textContent = c.mlCode;
     renderHierarchy([]); // CP 系の系統表示データは 3a では持たない
+    renderProvBadge(provisionalSuffix(c.source)); // CompositeEntry.source も同じ規約(案 K §2.2)
     return;
   }
   const lead = h1 ?? h0;
@@ -686,6 +743,8 @@ function updatePathInfo(): void {
     globalCode.textContent = code || '—';
     renderHierarchy(HIERARCHY[code] ?? []);
   }
+  // 大見出し = 描画中(最終または唯一)ステージの形態 → バッジもその region から
+  renderProvBadge(lead ? provisionalSuffix(lead.region.source) : null);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1146,6 +1205,17 @@ vaporSlider.addEventListener('input', onSliderInput);
 morphologySelect.addEventListener('change', () => {
   setMode(morphologySelect.value ? 'manual' : 'climate');
 });
+
+// 広幅枝 2 案比較トグル(案 K K-a)。disabled 中はクリック不可なので
+// 広幅枝表示時のみ発火する。切替は再ビルドのみ — モードは変えない
+for (const btn of broadVariantButtons) {
+  btn.addEventListener('click', () => {
+    const next = Number(btn.dataset.variant) as 1 | 2;
+    if (next === broadVariant) return;
+    broadVariant = next;
+    rebuild();
+  });
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // Resize

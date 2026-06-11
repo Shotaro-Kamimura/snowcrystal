@@ -69,8 +69,8 @@ const BASAL: BilingualText = { ja: '{0001} 基底面', en: 'basal face' };
 const PRISM: BilingualText = { ja: '{10-1̄0} 柱面', en: 'prism face' };
 
 /**
- * 注記対応表(設計書 §3 の 14 形態 × {軸 / 面 / 角度})。
- * union 14 値の Record 網羅により、形態追加時は tsc が注記漏れを検出する
+ * 注記対応表(設計書 §3 の 14 形態 + 広幅枝(案 K K-a)× {軸 / 面 / 角度})。
+ * union 15 値の Record 網羅により、形態追加時は tsc が注記漏れを検出する
  * (案 M の LABELS と同じ仕組み)。包絡・断面の数値根拠は morphologies.ts の
  * 採用寸法(各行コメント)。
  */
@@ -168,6 +168,21 @@ export const ANNOTATIONS: Record<Morphology, AnnotationSpec> = {
     faces: {},
     arcs: [],
     note: { ja: '花弁方位 = a 軸(30° + k·60°)', en: 'petals along a-axes (30° + k·60°)' },
+  },
+  // 広幅枝(P1c、仮実装)— 扇形のパラメタ族(案 K K-a)。両案とも花弁方位 =
+  // 30° + k·60°(案 1 = 扇形と同じハブ頂点整合 / 案 2 = 六角花弁の頂点方位 =
+  // 軸 + k·60°)で、中心ハブは CylinderGeometry(6 分割)= Cylinder 族(R2)。
+  // 包絡: 案 1 先端 0.42 + 1.1 = 1.52(案 2 は 0.48 + 0.92 = 1.40 ⊂ 1.52)・厚 0.2
+  広幅枝: {
+    phaseRad: CYLINDER_PHASE,
+    envelope: { radius: 1.52, height: 0.2 },
+    axes: 'standard',
+    faces: {},
+    arcs: [],
+    note: {
+      ja: '花弁方位 = a 軸(30° + k·60°)— 仮実装(2 案比較)',
+      en: 'petals along a-axes; provisional (two readings)',
+    },
   },
   // 主枝長 2.1・中心柱厚 0.2。±60° 弧は最外接合点(0.5×(2 + 1.5) = 1.75)に置く
   樹枝状: {

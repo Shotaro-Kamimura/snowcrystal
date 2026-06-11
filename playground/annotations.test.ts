@@ -12,7 +12,7 @@ import {
   sidePlaneDihedralArc,
 } from './annotations';
 
-/** union 14 値(網羅は Record 型で tsc が保証 — ここでは実行時の鍵集合を固定)。 */
+/** union 15 値(網羅は Record 型で tsc が保証 — ここでは実行時の鍵集合を固定)。 */
 const ALL_MORPHOLOGIES: Morphology[] = [
   '針',
   'さや',
@@ -22,6 +22,7 @@ const ALL_MORPHOLOGIES: Morphology[] = [
   '厚角板',
   '骸晶角板',
   '扇形',
+  '広幅枝',
   '樹枝状',
   '砲弾集合',
   '側面',
@@ -30,8 +31,8 @@ const ALL_MORPHOLOGIES: Morphology[] = [
   '長柱',
 ];
 
-describe('ANNOTATIONS(案 N §3 の 14 形態対応表)', () => {
-  it('14 形態を網羅する', () => {
+describe('ANNOTATIONS(案 N §3 の 14 形態 + 広幅枝(案 K)対応表)', () => {
+  it('15 形態を網羅する', () => {
     expect(Object.keys(ANNOTATIONS).sort()).toEqual([...ALL_MORPHOLOGIES].sort());
   });
 
@@ -70,11 +71,20 @@ describe('ANNOTATIONS(案 N §3 の 14 形態対応表)', () => {
     expect(degs('さや')).toEqual([240]);
     expect(degs('針')).toEqual([240]);
     expect(degs('扇形')).toEqual([]);
+    expect(degs('広幅枝')).toEqual([]);
     expect(degs('樹枝状')).toEqual([60, -60]);
     expect(degs('星状')).toEqual([]);
     expect(degs('羊歯')).toEqual([60, -60]);
     expect(degs('砲弾集合')).toEqual([28.0]);
     expect(degs('側面')).toEqual([70.3]);
+  });
+
+  it('広幅枝(案 K K-a): 扇形と同族(Cylinder 位相・包絡 1.52)+ 仮実装の一文注記', () => {
+    const spec = ANNOTATIONS['広幅枝'];
+    expect(spec.phaseRad).toBe(CYLINDER_PHASE); // 花弁方位 30° + k·60°(両案共通)・ハブ = Cylinder 族
+    expect(spec.envelope).toEqual({ radius: 1.52, height: 0.2 }); // 案 1 先端(案 2 の 1.40 を包含)
+    expect(spec.axes).toBe('standard');
+    expect(spec.note?.ja).toContain('仮実装');
   });
 
   it('包絡定数は正・軸モードと付帯データが整合する', () => {

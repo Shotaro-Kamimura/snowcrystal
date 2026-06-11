@@ -17,3 +17,12 @@ describe('案M 分類ラベル — 星状・羊歯・長柱', () => {
     }
   });
 });
+
+// 案 K(CP-K2)の分類ラベル検証(設計書 §3.3)。
+describe('案K 分類ラベル — 広幅枝', () => {
+  it("a. TITLE_MAP に広幅枝(ja / en)・コードは未割当('') — 案 M の轍を踏襲", () => {
+    expect(TITLE_MAP['広幅枝']).toEqual({ ja: '広幅枝', en: 'Broad Branches' });
+    expect(getGlobalLabel('広幅枝')).toBe('');
+    expect(getSubtypeCode('広幅枝')).toBe('');
+  });
+});

@@ -79,16 +79,17 @@ describe('renderGrowthPath(設計書 §6)', () => {
     expect(pathHit.composite?.morphology).toBe('冠柱');
   });
 
-  it('同クラスパス (−15, 0.25) → (−13, 0.22): composite null・冠柱 group でなく扇形へ委譲', () => {
+  it('同クラスパス (−15, 0.25) → (−13, 0.22): composite null・冠柱 group でなく広幅枝へ委譲', () => {
     const group = renderGrowthPath([
       { temperature: -15, supersaturation: 0.25 },
       { temperature: -13, supersaturation: 0.22 },
     ]);
     const pathHit = group.userData.pathHit as PathHit;
     expect(pathHit.composite).toBeNull();
-    // 最終ステージ P1c の描画形態 = 扇形(中心六角柱 + 花弁6 = children 7)
+    // 最終ステージ P1c の描画形態 = 広幅枝(案 K K-a で扇形近似を解消。
+    // 扇形族のため構成は同じ: 中心六角柱 + 花弁6 = children 7)
     expect(pathHit.stages[1].region.id).toBe('ml66/P1c');
-    expect(pathHit.stages[1].morphology).toBe('扇形');
+    expect(pathHit.stages[1].morphology).toBe('広幅枝');
     expect(group.children).toHaveLength(7);
     expect(group.children[0].userData.part).toBeUndefined();
   });

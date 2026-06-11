@@ -14,7 +14,7 @@ describe('ML66 ゴールデン(一次資料アンカー)', () => {
       [-5, 1.2, '針'],
       [-7, 1.2, 'さや'],
       [-9, 1.2, '骸晶角柱'],
-      [-15, 0.9, '扇形'], // 広幅枝(P1c)領域 → 描画は扇形(2026-06-10 修正で挿入)
+      [-15, 0.9, '広幅枝'], // 広幅枝(P1c)領域 → 専用描画(案 K K-a、CP-K2 で扇形近似を解消)
       [-15, 1.05, '星状'], // 星状(P1d)領域 → 専用描画(案 M、CP-M2 で樹枝状近似を解消)
       [-12, 1.2, '骸晶角板'], // 隣接バンド (−13,−10] は非変更(不変確認)
       [-2, 0.5, '角板'],
@@ -45,8 +45,8 @@ describe('ML66 ゴールデン(一次資料アンカー)', () => {
   it('a. 領域メタデータ: 広幅枝は P1c/approx、星状は P1d/exact(案 M)、長柱は labelJa付きの専用形態', () => {
     const kouhaba = classifyOnDiagram(-15, vaporAt(-15, 0.9), ML66);
     expect(kouhaba.mlCode).toBe('P1c');
-    expect(kouhaba.region.fidelity).toBe('approx');
-    expect(kouhaba.morphology).toBe('扇形');
+    expect(kouhaba.region.fidelity).toBe('approx'); // 仮実装中は据え置き(案 K §2.1)
+    expect(kouhaba.morphology).toBe('広幅枝');
 
     const hoshi = classifyOnDiagram(-15, vaporAt(-15, 1.05), ML66);
     expect(hoshi.mlCode).toBe('P1d');
@@ -73,7 +73,8 @@ describe('ML66 ゴールデン(一次資料アンカー)', () => {
     expect(p1f.morphology).toBe('羊歯');
     expect(p1f.fidelity).toBe('exact');
     expect(p1f.labelJa).toBe('羊歯');
-    expect(p1f.source).toBe('provisional'); // 図上範囲の確度は据え置き(設計書 §3.3・裁量 6)
+    // 旧 'provisional'(裸)→ 新規約 'provisional: <何が仮か>' へ正規化(案 K §2.1・CP-K2 裁量 2)
+    expect(p1f.source).toBe('provisional: 図上範囲(独自定義・出典なし)');
     expect(p1f.confidence).toBe('low');
 
     const n1e = ML66.regions['ml66/N1e'];
@@ -81,6 +82,20 @@ describe('ML66 ゴールデン(一次資料アンカー)', () => {
     expect(n1e.fidelity).toBe('exact');
     expect(n1e.labelJa).toBe('長柱');
     expect(n1e.source).toBe('ML66 §3.1(Shimizu)');
+  });
+
+  it('e. 案K P1c 割当・目視定番ゴールデン: (−15, 0.20) → ml66/P1c・広幅枝・approx・provisional 接頭辞', () => {
+    // 積乱雲コース(案 K §6.2)のステージ①と同値の定番条件
+    const hit = classifyOnDiagram(-15, 0.2, ML66);
+    expect(hit.region.id).toBe('ml66/P1c');
+    expect(hit.morphology).toBe('広幅枝');
+    expect(hit.region.labelJa).toBe('広幅枝');
+    expect(hit.region.fidelity).toBe('approx');
+    // 機械可読の仮フラグは接頭辞 1 本(案 K §2.1)。確認(1)の連動と既存出典の続記を固定
+    expect(hit.region.source).toBe(
+      'provisional: 形状解釈(確認(1)待ち)— ML66 Fig.2(デジタイズ・ユーザー同定 2026-06-10)',
+    );
+    expect(hit.region.confidence).toBe('mid'); // 図上範囲の確度は据え置き(描画の仮とは独立)
   });
 
   it('d. 案M 目視定番ゴールデン: 星状 (−15, 0.23) P1d / 羊歯 (−16, 0.29) P1f / 長柱 (−33, 0.05) N1e', () => {

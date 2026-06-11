@@ -25,6 +25,8 @@ export const TITLE_MAP: Record<Morphology, { ja: string; en: string }> = {
   星状: { ja: '星状', en: 'Stellar Crystal' },
   羊歯: { ja: '羊歯', en: 'Fernlike Crystal' },
   長柱: { ja: '長柱', en: 'Long Solid Column' },
+  // ML66 P1c (crystal with broad branches)。コードは未割当のまま(案 M 裁量を踏襲)
+  広幅枝: { ja: '広幅枝', en: 'Broad Branches' },
 };
 
 /** Short subtype lists keyed by global-classification code. */

@@ -90,13 +90,17 @@ const REGIONS: Readonly<Record<string, DiagramRegion>> = {
     source: 'ML66 Fig.2(デジタイズ済・紫スケッチ)',
     confidence: 'mid',
   },
+  // 広幅枝の描画は仮実装(案 K K-a): 案 1(平行広幅)既定 + 案 2(拡幅六角花弁)
+  // 比較実装。source 接頭辞 'provisional: ' が機械可読の仮フラグ(設計書 §2.1)。
+  // fidelity は仮実装中 'approx' 据え置き — 9 月確認 (1) の確定で 'exact' へ昇格
   'ml66/P1c': {
     id: 'ml66/P1c',
     mlCode: 'P1c',
-    morphology: '扇形',
+    morphology: '広幅枝',
     fidelity: 'approx',
     labelJa: '広幅枝',
-    source: 'ML66 Fig.2(デジタイズ・ユーザー同定 2026-06-10)',
+    source:
+      'provisional: 形状解釈(確認(1)待ち)— ML66 Fig.2(デジタイズ・ユーザー同定 2026-06-10)',
     confidence: 'mid',
   },
   'ml66/P1d': {
@@ -118,13 +122,15 @@ const REGIONS: Readonly<Record<string, DiagramRegion>> = {
     source: 'ML66 Fig.2(デジタイズ済)',
     confidence: 'high',
   },
+  // source は旧 'provisional'(裸)を新規約 'provisional: <何が仮か>' へ正規化
+  // (案 K 設計書 §2.1 注・CP-K2 裁量 2)。仮なのは図上範囲(s 値)であって形状ではない
   'ml66/P1f': {
     id: 'ml66/P1f',
     mlCode: 'P1f',
     morphology: '羊歯',
     fidelity: 'exact',
     labelJa: '羊歯',
-    source: 'provisional',
+    source: 'provisional: 図上範囲(独自定義・出典なし)',
     confidence: 'low',
   },
   'ml66/C2a': {
