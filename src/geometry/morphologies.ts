@@ -9,6 +9,7 @@ import {
   extrudePrism,
   outlineToShape,
   type DendriteArmOptions,
+  type SidePlanesOptions,
 } from './parts';
 import { dentedHexOutline } from './hexOutlineBuilder';
 
@@ -97,6 +98,21 @@ export const BROAD_BRANCH_HEX_PETAL_PARAMS: SectorPetalOptions = {
   petalWidth: Math.sqrt(3) * BROAD_BRANCH_HEX_R,
   petalLength: 2 * BROAD_BRANCH_HEX_R,
   baseRadius: 0.48,
+};
+
+/**
+ * 鱗状側面(ML66 S2、仮実装)— 側面のパラメタ族(案 K 設計書 §4.2):
+ * フィン小型化(radiusBase 0.9 → 0.5)・枚数増(count 6〜7 = 現行レンジ [4,7] の
+ * 上側に固定)・スパイン方向スタッガ拡大(±0.4 → ±0.9。小さな鱗が軸方向に
+ * ずれて重なる ML66 Fig.1 の読み)。フィン形状(半六角・スパイン = a 軸)と
+ * CSL 双晶角 70.3° アンカーは不変(S2 も同族の多結晶側面 — 結晶学アンカーは
+ * 仮にしない)。最終値は CP-K5 停止 2 の目視で確定(砲弾・側面 S1 と同方式の一任)。
+ * 案 K 内部 API — src/index.ts には export しない。
+ */
+export const SCALELIKE_SIDE_PLANE_PARAMS: SidePlanesOptions = {
+  radiusBase: 0.5,
+  countRange: [6, 7],
+  staggerSpan: 0.9,
 };
 
 /**
@@ -434,6 +450,14 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
       // 凍結雲粒起源の多結晶: 共通スパイン(a軸)から CSL 70.3° アンカーの二面角で
       // 張り出す半六角薄板 4〜7 枚。seed→rng の経路は針・ロゼットと同一
       return createSidePlanes(rng);
+    }
+
+    case '鱗状側面': {
+      // 鱗状側面(ML66 S2、scalelike side planes)— 仮実装(provisional)。
+      // 側面のパラメタ族(SCALELIKE_SIDE_PLANE_PARAMS: 小型・密・スタッガ拡大)。
+      // 縦位置(図上範囲)は ML66 原典忠実のまま — 9 月専門家確認 (5) で確定
+      // (案 K 設計書 §4)
+      return createSidePlanes(rng, SCALELIKE_SIDE_PLANE_PARAMS);
     }
 
     case '厚角板': {

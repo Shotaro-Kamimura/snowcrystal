@@ -151,13 +151,19 @@ const REGIONS: Readonly<Record<string, DiagramRegion>> = {
     source: 'ML66 Fig.2(デジタイズ済)',
     confidence: 'mid',
   },
+  // 鱗状側面の描画は仮実装(案 K K-b): 側面のパラメタ族(小型・密・スタッガ拡大)。
+  // source 接頭辞 'provisional: ' が機械可読の仮フラグ(設計書 §2.1)。カテゴリ語 =
+  // 形状解釈(鱗状差分が仮 — 確認(5)待ち)。縦位置(図上範囲)は ML66 原典忠実の
+  // まま動かさない(§4.1)。fidelity は仮実装中 'approx' 据え置き —
+  // 9 月確認 (5) の確定で 'exact' へ昇格
   'ml66/S2': {
     id: 'ml66/S2',
     mlCode: 'S2',
-    morphology: '側面',
+    morphology: '鱗状側面',
     fidelity: 'approx',
-    labelJa: '側面',
-    source: 'ML66 Fig.2(デジタイズ済)・温度範囲は F8(Weickmann)',
+    labelJa: '鱗状側面',
+    source:
+      'provisional: 形状解釈(鱗状差分・確認(5)待ち)— ML66 Fig.2(デジタイズ済)・温度範囲は F8(Weickmann)',
     confidence: 'mid',
   },
   'ml66/N1e': {

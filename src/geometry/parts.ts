@@ -171,7 +171,7 @@ export interface SidePlaneFin {
   baseOffsetDeg: number | null;
   /** サイズジッタ(0.8〜1.2) */
   radiusScale: number;
-  /** スパイン方向スタッガ(R_base 倍率、±0.4) */
+  /** スパイン方向スタッガ(R_base 倍率、±staggerSpan。側面の既定は ±0.4) */
   staggerRatio: number;
 }
 
@@ -193,14 +193,38 @@ function minCircularGapDeg(angles: number[]): number {
 }
 
 /**
+ * 現行の側面(S1)の採用値(v2 以来の値そのまま)。側面の出力ビット不変の基準値 —
+ * 値の変更は見た目回帰になるため vitest でリテラル固定する
+ * (DENDRITE_ARM_DEFAULTS・SECTOR_PETAL_DEFAULTS と同方式。案 K 設計書 §4.2)。
+ * 案 K 内部 API — src/index.ts には export しない。
+ */
+export const SIDE_PLANES_DEFAULTS = {
+  radiusBase: 0.9,
+  countRange: [4, 7],
+  staggerSpan: 0.4,
+} as const;
+
+/**
  * 側面フィンの配置列をシード乱数で生成する(設計書 §4 案B)。
  * 基準角 θ0 + 規定集合から重複なく選んだオフセット + ジッタ ±6°。
  * 最小角間隔 20°(mod 360°)を満たすまで再抽選(上限 200 回)、
  * 上限到達で等間隔配置にフォールバック(baseOffsetDeg = null)。
- * 本数は count 省略時 rng で 4〜7 一様。決定性は mulberry32 経路(針・ロゼットと同流儀)。
+ * 本数は count 省略時 rng で countRange から一様(側面の既定 4〜7)。
+ * 決定性は mulberry32 経路(針・ロゼットと同流儀)。
+ * 案 K K-b: countRange / staggerSpan のパラメタ族(既定マージのみ —
+ * 側面はビット同一、フルメッシュ署名ゴールデンで機械証明。設計書 §4.2)。
  */
-export function sampleSidePlaneLayout(rng: () => number, count?: number): SidePlaneFin[] {
-  const n = count === undefined ? 4 + Math.floor(rng() * 4) : Math.min(7, Math.max(4, Math.floor(count)));
+export function sampleSidePlaneLayout(
+  rng: () => number,
+  count?: number,
+  opts: Pick<SidePlanesOptions, 'countRange' | 'staggerSpan'> = {},
+): SidePlaneFin[] {
+  const [countMin, countMax] = opts.countRange ?? SIDE_PLANES_DEFAULTS.countRange;
+  const staggerSpan = opts.staggerSpan ?? SIDE_PLANES_DEFAULTS.staggerSpan;
+  const n =
+    count === undefined
+      ? countMin + Math.floor(rng() * (countMax - countMin + 1))
+      : Math.min(countMax, Math.max(countMin, Math.floor(count)));
   const theta0 = rng() * 360;
 
   let angles: number[] | null = null;
@@ -228,31 +252,38 @@ export function sampleSidePlaneLayout(rng: () => number, count?: number): SidePl
     angleDeg,
     baseOffsetDeg: baseOffsets[i],
     radiusScale: 0.8 + rng() * 0.4,
-    staggerRatio: (rng() * 2 - 1) * 0.4,
+    staggerRatio: (rng() * 2 - 1) * staggerSpan,
   }));
 }
 
 export interface SidePlanesOptions {
   /** フィンの基準外接半径(既定 0.9) */
   radiusBase?: number;
-  /** フィン枚数(省略時 rng で 4〜7) */
+  /** フィン枚数(省略時 rng で countRange から一様) */
   count?: number;
+  /** count 省略時の本数レンジ・指定時のクランプ域 [min, max](既定 [4, 7]) */
+  countRange?: readonly [number, number];
+  /** スパイン方向スタッガ係数の振幅(staggerRatio ∈ ±staggerSpan。既定 0.4) */
+  staggerSpan?: number;
 }
 
 /**
- * 側面(ML66 S1。S2 は同レンダラの approx)。凍結雲粒起源の多結晶を、
- * 共通スパイン(a 軸)から異なる二面角で張り出す 4〜7 枚の半六角薄板で表す
- * (設計書 §3〜§4)。二面角は CSL 双晶角 70.3° アンカー+ジッタ(案B)。
+ * 側面(ML66 S1)。凍結雲粒起源の多結晶を、共通スパイン(a 軸)から異なる
+ * 二面角で張り出す 4〜7 枚の半六角薄板で表す(設計書 §3〜§4)。
+ * 二面角は CSL 双晶角 70.3° アンカー+ジッタ(案B)。
  * 中心構造は追加せず、薄板同士がスパイン近傍で自然に交差して芯が立つ。
+ * 案 K K-b: S2(鱗状側面)は本ビルダーのパラメタ族
+ * (morphologies.ts SCALELIKE_SIDE_PLANE_PARAMS — 小型・密・スタッガ拡大)。
+ * フィン形状(半六角・スパイン = a 軸)と CSL アンカーは族で共通(仮にしない)。
  */
 export function createSidePlanes(
   rng: () => number,
   opts: SidePlanesOptions = {},
 ): THREE.Group {
-  const radiusBase = opts.radiusBase ?? 0.9;
+  const radiusBase = opts.radiusBase ?? SIDE_PLANES_DEFAULTS.radiusBase;
   const group = new THREE.Group();
 
-  for (const fin of sampleSidePlaneLayout(rng, opts.count)) {
+  for (const fin of sampleSidePlaneLayout(rng, opts.count, opts)) {
     const mesh = createSideFin(radiusBase * fin.radiusScale);
     mesh.rotation.y = (fin.angleDeg * Math.PI) / 180; // 共有スパイン(+Y)まわりの二面角
     mesh.position.y = fin.staggerRatio * radiusBase; // スパイン方向スタッガ

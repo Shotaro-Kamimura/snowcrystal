@@ -19,7 +19,7 @@ import { renderGrowthPath } from '../src/growth/renderGrowthPath'; // 3a 暫定(
 import type { GrowthStage, PathHit } from '../src/growth/types'; // 3a 暫定(同上)
 import { dentedHexOutline } from '../src/geometry/hexOutlineBuilder'; // 案 N: 240° 弧の頂点計算(純関数・表示専用)
 import { buildBroadBranchPlan2 } from '../src/geometry/morphologies'; // 案 K K-a: 広幅枝 案 2(internal — K2 申し送りどおり公開 API に出さない)
-import { provisionalSuffix } from '../src/diagram/provisional'; // 案 K §2.1: 仮フラグ('provisional: ' 接頭辞)のパーサ
+import { parseProvisionalSource, provisionalSuffix } from '../src/diagram/provisional'; // 案 K §2.1: 仮フラグ('provisional: ' 接頭辞)+カテゴリ語文法(§2.1.1)のパーサ
 import {
   ANNOTATIONS,
   PYRAMID_FACE_ANGLE_FROM_AXIS_RAD,
@@ -50,6 +50,7 @@ const LABELS: Record<Morphology, { ja: string; en: string }> = {
   星状: { ja: '星状', en: 'Stellar Crystal' },
   羊歯: { ja: '羊歯', en: 'Fernlike Crystal' },
   長柱: { ja: '長柱', en: 'Long Solid Column' },
+  鱗状側面: { ja: '鱗状側面', en: 'Scalelike Side Planes' },
 };
 
 // Global-classification lineage per code (mirrors FULL_SUBTYPE_MAP for display).
@@ -506,7 +507,7 @@ function buildRosetteAnnotations(group: THREE.Group, spec: AnnotationSpec): void
   }
 }
 
-/** 側面(R7): スパイン = a 軸 ∥ +Y + 二面角 70.3° 弧(裁量 3)。 */
+/** 側面族(R7): スパイン = a 軸 ∥ +Y + 二面角 70.3° 弧(裁量 3)。 */
 function buildSidePlaneAnnotations(group: THREE.Group, spec: AnnotationSpec): void {
   const spineLen = (spec.envelope.height / 2) * 1.3;
   annotArrow(group, new THREE.Vector3(0, 1, 0), new THREE.Vector3(), spineLen, ANNOT_A_COLOR, {
@@ -515,8 +516,9 @@ function buildSidePlaneAnnotations(group: THREE.Group, spec: AnnotationSpec): vo
   });
 
   // フィンは rotation.y = ρ で配置され世界方位は −ρ(方位シフト規約)。
-  // 実フィン角から CSL アンカー 70.3° の弧を張る(annotations.ts 参照)
-  const arc = sidePlaneDihedralArc();
+  // 実フィン角から CSL アンカー 70.3° の弧を張る(annotations.ts 参照)。
+  // 鱗状側面は spec.sidePlaneParams で専用レイアウトを再生(案 K K-b)
+  const arc = sidePlaneDihedralArc(spec.sidePlaneParams);
   const azFrom = (-arc.fromRotationDeg * Math.PI) / 180;
   const azTo = (-arc.toRotationDeg * Math.PI) / 180;
   const center = new THREE.Vector3(0, 0.45, 0);
@@ -633,14 +635,31 @@ function renderProvBadge(suffix: string | null): void {
   }
 }
 
-/** 手動モード用: 形態に対応する ML66 領域から仮 suffix を引く(該当なしは null)。 */
-function provisionalSuffixForMorph(morph: Morphology): string | null {
+/**
+ * 手動モード用: 形態に対応する ML66 領域から「形状が仮」の suffix を引く。
+ * 点灯はカテゴリ語が 形状解釈 の場合のみ(d2d7b65 仕様判定 1 の出し分け —
+ * 手動モードは形状のみ表示するため、図上範囲だけが仮の形態(羊歯)は消灯)。
+ * スライダー・成長パスモードは従来どおり provisionalSuffix(表示中の領域主張+
+ * 形状の両系統で点灯 — 現状不変)。
+ */
+function provisionalShapeSuffixForMorph(morph: Morphology): string | null {
   for (const region of Object.values(ML66.regions)) {
     if (region.morphology !== morph) continue;
-    const suffix = provisionalSuffix(region.source);
-    if (suffix !== null) return suffix;
+    if (parseProvisionalSource(region.source)?.category === '形状解釈') {
+      return provisionalSuffix(region.source);
+    }
   }
   return null;
+}
+
+// セレクトの（仮）表記はカテゴリ語(形状解釈)から起動時に導出する(単一情報源 —
+// ハードコード廃止。K2 仕様判定 1 の申し送り、設計書 §2.2)。対象 = 広幅枝・鱗状側面
+for (const option of Array.from(morphologySelect.options)) {
+  if (!option.value) continue;
+  const morph = option.value as Morphology;
+  if (provisionalShapeSuffixForMorph(morph) !== null) {
+    option.textContent = `${LABELS[morph].ja}（仮） / ${LABELS[morph].en}`;
+  }
 }
 
 /** 広幅枝 2 案トグルの有効/無効と選択ハイライト(広幅枝表示時のみ有効)。 */
@@ -691,7 +710,7 @@ function updateInfo(): void {
   } else {
     regionLine.textContent = '';
     regionLine.style.display = 'none';
-    renderProvBadge(provisionalSuffixForMorph(currentMorph));
+    renderProvBadge(provisionalShapeSuffixForMorph(currentMorph));
   }
 }
 

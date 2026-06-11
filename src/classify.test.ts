@@ -26,3 +26,12 @@ describe('案K 分類ラベル — 広幅枝', () => {
     expect(getSubtypeCode('広幅枝')).toBe('');
   });
 });
+
+// 案 K(CP-K5)の分類ラベル検証(設計書 §4.3)。
+describe('案K 分類ラベル — 鱗状側面', () => {
+  it("a. TITLE_MAP に鱗状側面(ja / en)・コードは未割当('') — 同上", () => {
+    expect(TITLE_MAP['鱗状側面']).toEqual({ ja: '鱗状側面', en: 'Scalelike Side Planes' });
+    expect(getGlobalLabel('鱗状側面')).toBe('');
+    expect(getSubtypeCode('鱗状側面')).toBe('');
+  });
+});

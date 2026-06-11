@@ -531,13 +531,15 @@
 
         <div class="select-row">
           <label for="morphology">形態を直接選択</label>
+          <!-- （仮）表記はハードコードせず、main.ts がカテゴリ語(形状解釈)から
+               起動時に導出して付す(単一情報源 — K2 仕様判定 1 の申し送り) -->
           <select id="morphology">
             <option value="">（スライダー連動）</option>
             <option value="樹枝状">樹枝状 / Dendrite</option>
             <option value="星状">星状 / Stellar Crystal</option>
             <option value="羊歯">羊歯 / Fernlike Crystal</option>
             <option value="扇形">扇形 / Sector</option>
-            <option value="広幅枝">広幅枝（仮） / Broad Branches</option>
+            <option value="広幅枝">広幅枝 / Broad Branches</option>
             <option value="角板">角板 / Plate</option>
             <option value="厚角板">厚角板 / Thick Plate</option>
             <option value="骸晶角板">骸晶角板 / Skeleton Plate</option>
@@ -548,6 +550,7 @@
             <option value="さや">さや / Sheath</option>
             <option value="砲弾集合">砲弾集合 / Bullet Rosette</option>
             <option value="側面">側面 / Side Planes</option>
+            <option value="鱗状側面">鱗状側面 / Scalelike Side Planes</option>
           </select>
         </div>
 

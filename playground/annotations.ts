@@ -17,7 +17,10 @@
 import type { Morphology } from '../src/index';
 import { mulberry32 } from '../src/random'; // 深い import(表示専用・src 不変。main.ts の growth と同じ扱い)
 import { sampleRosetteAxes } from '../src/geometry/rosette';
-import { sampleSidePlaneLayout } from '../src/geometry/parts';
+import { sampleSidePlaneLayout, type SidePlanesOptions } from '../src/geometry/parts';
+// 鱗状側面(案 K K-b)の採用パラメタ。コピーでなく実定数の参照(単一情報源 —
+// main.ts の buildBroadBranchPlan2 と同じ internal 深 import の扱い)
+import { SCALELIKE_SIDE_PLANE_PARAMS } from '../src/geometry/morphologies';
 import {
   CSL_TWIN_ANGLE_DEG,
   ICE_C_OVER_A,
@@ -57,6 +60,8 @@ export interface AnnotationSpec {
   dent?: { m: number; w: number };
   /** ±60° 弧の接合点(代表腕 = +Z 上の z 距離。樹枝状・羊歯のみ) */
   sideBranchJunctionZ?: number;
+  /** spine 軸の側面族レイアウト(鱗状側面 = SCALELIKE_SIDE_PLANE_PARAMS。省略 = 側面の既定) */
+  sidePlaneParams?: SidePlanesOptions;
   /** 面ラベル({0001}・{10-1̄0}・{10-1̄1} — Unicode 表記は docs と同一) */
   faces: { basal?: BilingualText; prism?: BilingualText; pyramidal?: BilingualText };
   /** 角度弧(値は {120, 240, ±60, 28.0, 70.3} に限る — テストで固定) */
@@ -237,6 +242,23 @@ export const ANNOTATIONS: Record<Morphology, AnnotationSpec> = {
     arcs: [{ deg: 70.3, kind: 'dihedral' }],
     note: { ja: 'スパイン = a 軸・c 軸はフィンごと', en: 'spine = a-axis; c-axis per fin' },
   },
+  // 鱗状側面(S2、仮実装)— 側面のパラメタ族(案 K K-b: 小型 0.5・密 6〜7 枚・
+  // スタッガ ±0.9)。族位相は側面と同一(スパイン = a 軸 ∥ +Y(R7)・builder 基準値 0・
+  // CSL 70.3° アンカー共通)。包絡: 水平 (√3/2)·0.5·1.2 ≈ 0.52、
+  // スパイン ±(0.5·1.2 + 0.9·0.5) = ±1.05。二面角弧は専用レイアウトの再生
+  // (sidePlaneDihedralArc(SCALELIKE_SIDE_PLANE_PARAMS))から張る
+  鱗状側面: {
+    phaseRad: BUILDER_PHASE,
+    envelope: { radius: 0.52, height: 2.1 },
+    axes: 'spine',
+    sidePlaneParams: SCALELIKE_SIDE_PLANE_PARAMS,
+    faces: {},
+    arcs: [{ deg: 70.3, kind: 'dihedral' }],
+    note: {
+      ja: 'スパイン = a 軸・小鱗の重なり(仮実装)',
+      en: 'spine = a-axis; overlapping scales (provisional)',
+    },
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -289,13 +311,15 @@ export interface SidePlaneArcAnnotation {
 }
 
 /**
- * 側面の二面角 70.3° 弧(設計書 §3 表・裁量 3)。
+ * 側面族の二面角 70.3° 弧(設計書 §3 表・裁量 3)。
  * createSidePlanes と同じ rng 消費順でフィン配置を再生し、基底オフセットが
  * ちょうど 70.3° 差のフィン対を探して、実フィン角から CSL アンカー角の弧を張る。
  * (実フィンはジッタ ±6° を持つため、弧はアンカー角 70.3° の側で固定する)
+ * opts: 鱗状側面(案 K K-b)は SCALELIKE_SIDE_PLANE_PARAMS を渡して専用
+ * レイアウトを再生する(省略 = 側面 S1 の既定。CSL アンカーは族で共通)。
  */
-export function sidePlaneDihedralArc(): SidePlaneArcAnnotation {
-  const layout = sampleSidePlaneLayout(mulberry32(DEFAULT_SEED));
+export function sidePlaneDihedralArc(opts?: SidePlanesOptions): SidePlaneArcAnnotation {
+  const layout = sampleSidePlaneLayout(mulberry32(DEFAULT_SEED), opts?.count, opts);
   for (const a of layout) {
     for (const b of layout) {
       if (

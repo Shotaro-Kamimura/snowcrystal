@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { createHash } from 'node:crypto';
 import { THREE } from '../three';
 import { A_AXES, CSL_TWIN_ANGLE_DEG, halfHexOutline } from './crystallography';
-import { SIDE_PLANE_OFFSETS_DEG, sampleSidePlaneLayout } from './parts';
+import { SIDE_PLANE_OFFSETS_DEG, SIDE_PLANES_DEFAULTS, sampleSidePlaneLayout } from './parts';
+import { buildMorphology, SCALELIKE_SIDE_PLANE_PARAMS } from './morphologies';
 import { mulberry32 } from '../random';
 import { createSnowCrystal, disposeCrystal } from '../createSnowCrystal';
 
@@ -110,6 +112,150 @@ describe('側面スモーク(設計書 §7-4)', () => {
     const group = createSnowCrystal({ morphology: '側面', seed: 42 });
     expect(group).toBeInstanceOf(THREE.Group);
     expect(group.children.length).toBeGreaterThanOrEqual(4);
+    expect(group.children.length).toBeLessThanOrEqual(7);
+    expect(() => disposeCrystal(group)).not.toThrow();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// 案 K(CP-K5)— 鱗状側面(S2 仮実装)・側面族(設計書 §4.2)
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * フルメッシュ署名(CP-K2 ゲートの MD5 方式 — tipComposites.test.ts と同一実装)。
+ * obj.type + ローカル TRS + geometry.type + 全 BufferAttribute(名前ソート順・
+ * バイト列)+ index + マテリアル(type/color/flatShading/transparent/opacity)。
+ */
+function fullMeshSignature(root: THREE.Object3D): string {
+  const hash = createHash('md5');
+  root.traverse((obj) => {
+    hash.update(
+      [
+        obj.type,
+        obj.position.toArray().join(','),
+        obj.rotation.toArray().join(','),
+        obj.scale.toArray().join(','),
+      ].join('|'),
+    );
+    const mesh = obj as THREE.Mesh;
+    if (mesh.geometry) {
+      const geo = mesh.geometry as THREE.BufferGeometry;
+      hash.update(geo.type);
+      hash.update(JSON.stringify(geo.groups));
+      for (const name of Object.keys(geo.attributes).sort()) {
+        const attr = geo.getAttribute(name) as THREE.BufferAttribute;
+        hash.update(name);
+        hash.update(new Uint8Array(attr.array.buffer, attr.array.byteOffset, attr.array.byteLength));
+      }
+      if (geo.index) {
+        const arr = geo.index.array;
+        hash.update(new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength));
+      }
+    }
+    const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+    for (const m of mats) {
+      const std = m as THREE.MeshStandardMaterial;
+      hash.update(
+        [m.type, std.color?.getHexString() ?? '-', std.flatShading ?? '-', std.transparent, std.opacity].join(
+          '|',
+        ),
+      );
+    }
+  });
+  return hash.digest('hex');
+}
+
+describe('案K K-b — 側面ビット不変(族化の機械証明、設計書 §4.2)', () => {
+  it('e. SIDE_PLANES_DEFAULTS が現行値リテラルと一致(DENDRITE_ARM_DEFAULTS 方式)', () => {
+    // 値の変更は見た目回帰。countRange [4,7]・staggerSpan 0.4・radiusBase 0.9 は
+    // 族化前のハードコード値そのもの
+    expect(SIDE_PLANES_DEFAULTS).toEqual({
+      radiusBase: 0.9,
+      countRange: [4, 7],
+      staggerSpan: 0.4,
+    });
+  });
+
+  it('f. 側面フルメッシュ署名: 族化前ゴールデン(HEAD bac2534 で捕獲)と完全一致(seed 1/7/42)', () => {
+    // 族化(countRange/staggerSpan の既定マージ)が側面の出力を 1 ビットも
+    // 変えないことの直接証明。ゴールデンは実装変更前の HEAD bac2534 上で
+    // 同一の署名関数により捕獲した MD5
+    const golden: Record<number, string> = {
+      1: '671e7a49f06f9cfea8619af73cb28de8',
+      7: '01ed14f30fe44c1a6487807c8753d646',
+      42: 'f36bb0ccdcb60f7682860e5d1f68a5df',
+    };
+    for (const [seed, md5] of Object.entries(golden)) {
+      expect(
+        fullMeshSignature(buildMorphology('側面', mulberry32(Number(seed)))),
+        `seed ${seed}`,
+      ).toBe(md5);
+    }
+  });
+});
+
+describe('案K K-b — 鱗状側面(S2 仮実装、設計書 §4.2〜§4.3)', () => {
+  it('g. SCALELIKE_SIDE_PLANE_PARAMS が設計値リテラルと一致(小型 0.5・密 [6,7]・スタッガ ±0.9)', () => {
+    expect(SCALELIKE_SIDE_PLANE_PARAMS).toEqual({
+      radiusBase: 0.5,
+      countRange: [6, 7],
+      staggerSpan: 0.9,
+    });
+  });
+
+  it('h. 鱗状レイアウト: 本数 6〜7・オフセットは CSL 規定集合(不変アンカー)・|スタッガ| ≤ 0.9', () => {
+    for (const seed of [1, 2, 3, 7, 42, 123, 2024]) {
+      const fins = sampleSidePlaneLayout(
+        mulberry32(seed),
+        SCALELIKE_SIDE_PLANE_PARAMS.count,
+        SCALELIKE_SIDE_PLANE_PARAMS,
+      );
+      expect(fins.length, `seed ${seed} 本数`).toBeGreaterThanOrEqual(6);
+      expect(fins.length, `seed ${seed} 本数`).toBeLessThanOrEqual(7);
+      for (const fin of fins) {
+        // 二面角の CSL 70.3° アンカーは S1 と共通(結晶学アンカーは仮にしない — §4.2)
+        expect(fin.baseOffsetDeg, `seed ${seed} オフセット`).not.toBeNull();
+        expect(
+          SIDE_PLANE_OFFSETS_DEG.some((o) => Math.abs(o - fin.baseOffsetDeg!) < 1e-9),
+          `seed ${seed} オフセット ${fin.baseOffsetDeg} が規定集合外`,
+        ).toBe(true);
+        expect(Math.abs(fin.staggerRatio)).toBeLessThanOrEqual(0.9);
+      }
+    }
+  });
+
+  it('i. スタッガ拡大が実効(|ratio| > 0.4 のフィンが存在 — 鱗の軸方向の重なり表現)', () => {
+    // 全シードのどこかで旧振幅 0.4 を超えること(スパンが実際に広がった証拠)
+    const anyExpanded = [1, 2, 3, 7, 42, 123, 2024].some((seed) =>
+      sampleSidePlaneLayout(mulberry32(seed), undefined, SCALELIKE_SIDE_PLANE_PARAMS).some(
+        (fin) => Math.abs(fin.staggerRatio) > 0.4,
+      ),
+    );
+    expect(anyExpanded).toBe(true);
+  });
+
+  it('j. 鱗状側面の構造署名: レイアウト再生と一致(rotation.y = 二面角・position.y = ratio×0.5)', () => {
+    const group = buildMorphology('鱗状側面', mulberry32(42));
+    const fins = sampleSidePlaneLayout(mulberry32(42), undefined, SCALELIKE_SIDE_PLANE_PARAMS);
+    const meshes = group.children as THREE.Mesh[];
+    expect(meshes).toHaveLength(fins.length);
+    meshes.forEach((mesh, i) => {
+      expect((mesh as THREE.Mesh).geometry.type).toBe('ExtrudeGeometry'); // 半六角薄板(フィン形状不変)
+      expect(mesh.rotation.y).toBeCloseTo((fins[i].angleDeg * Math.PI) / 180, 12);
+      expect(mesh.position.y).toBeCloseTo(fins[i].staggerRatio * 0.5, 12); // radiusBase 0.5
+    });
+  });
+
+  it('k. 鱗状側面は側面と同シードで別形状・同シード同士は決定的・dispose 正常', () => {
+    expect(fullMeshSignature(buildMorphology('鱗状側面', mulberry32(42)))).not.toBe(
+      fullMeshSignature(buildMorphology('側面', mulberry32(42))),
+    );
+    expect(fullMeshSignature(buildMorphology('鱗状側面', mulberry32(7)))).toBe(
+      fullMeshSignature(buildMorphology('鱗状側面', mulberry32(7))),
+    );
+    const group = createSnowCrystal({ morphology: '鱗状側面', seed: 42 });
+    expect(group).toBeInstanceOf(THREE.Group);
+    expect(group.children.length).toBeGreaterThanOrEqual(6);
     expect(group.children.length).toBeLessThanOrEqual(7);
     expect(() => disposeCrystal(group)).not.toThrow();
   });

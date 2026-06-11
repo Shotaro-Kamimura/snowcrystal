@@ -26,7 +26,7 @@ describe('ML66 ゴールデン(一次資料アンカー)', () => {
       [-27, 0.9, '骸晶角柱'], // C1f
       [-33, 0.5, '長柱'], // 長柱(N1e)領域 → 専用描画(案 M、CP-M2 で角柱近似を解消)
       [-33, 1.2, '砲弾集合'],
-      [-33, 1.8, '側面'], // S2
+      [-33, 1.8, '鱗状側面'], // S2 → 専用描画(案 K K-b、CP-K5 で S1 同一レンダラ近似を解消)
       [-38, 1.8, '砲弾集合'], // S2 は −35 まで。−35 以深の最上段は C2a
     ];
     for (const [t, s, expected] of cases) {
@@ -109,6 +109,24 @@ describe('ML66 ゴールデン(一次資料アンカー)', () => {
       expect(hit.region.id, `(${t}, ${v})`).toBe(regionId);
       expect(hit.morphology).toBe(morph);
     }
+  });
+
+  it('f. 案K S2 割当ゴールデン: (−33, s1.8) → ml66/S2・鱗状側面・approx・provisional 接頭辞・既存出典続記', () => {
+    const hit = classifyOnDiagram(-33, vaporAt(-33, 1.8), ML66);
+    expect(hit.region.id).toBe('ml66/S2');
+    expect(hit.mlCode).toBe('S2');
+    expect(hit.morphology).toBe('鱗状側面');
+    expect(hit.region.labelJa).toBe('鱗状側面');
+    expect(hit.region.fidelity).toBe('approx'); // 仮実装中は据え置き(案 K §2.1)
+    // カテゴリ語 = 形状解釈(鱗状差分が仮 — 確認(5)待ち)+既存出典の続記を固定(§2.1.1 文法)
+    expect(hit.region.source).toBe(
+      'provisional: 形状解釈(鱗状差分・確認(5)待ち)— ML66 Fig.2(デジタイズ済)・温度範囲は F8(Weickmann)',
+    );
+    expect(hit.region.confidence).toBe('mid'); // 図上範囲の確度は据え置き(描画の仮とは独立)
+
+    // 縦位置(bands)は不変: S1(−23)は据え置き・S2 の隣接 C2a も不変(確認 (5) の本体は動かさない — §4.1)
+    expect(classifyOnDiagram(-23, vaporAt(-23, 1.8), ML66).region.id).toBe('ml66/S1');
+    expect(classifyOnDiagram(-23, vaporAt(-23, 1.8), ML66).morphology).toBe('側面');
   });
 
   it('b. 対角線の連続性: C1e の sTop が T=−25 で両隣バンドから一致(0.575)', () => {

@@ -27,6 +27,8 @@ export const TITLE_MAP: Record<Morphology, { ja: string; en: string }> = {
   長柱: { ja: '長柱', en: 'Long Solid Column' },
   // ML66 P1c (crystal with broad branches)。コードは未割当のまま(案 M 裁量を踏襲)
   広幅枝: { ja: '広幅枝', en: 'Broad Branches' },
+  // ML66 S2 (side planes — 鱗状)。コードは未割当のまま(同上。案 K 設計書 §4.3)
+  鱗状側面: { ja: '鱗状側面', en: 'Scalelike Side Planes' },
 };
 
 /** Short subtype lists keyed by global-classification code. */
