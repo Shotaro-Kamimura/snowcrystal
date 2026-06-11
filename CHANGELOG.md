@@ -25,6 +25,16 @@ branch is merged after the 0.2.0 release. The 0.2.0 section below stays frozen.
 - **None of this is exported from `src/index.ts`** — with `exports` limited to
   `"."`, the growth module is invisible to npm consumers (dist byte-identical,
   MD5-verified per gate); promotion to the public surface is a 0.3.0 decision.
+- `src/geometry/hexOutlineBuilder.ts` (case B, CP-B2): turn-constrained
+  {10-10} outline builder — integer direction indices (no angular drift),
+  an alternation rule that makes non-60°-family edges and interior angles
+  other than 120°/240° unrepresentable by construction, and seam-turn /
+  winding / closure checks in `close()`; plus `dentedHexOutline(R, m, w)`,
+  the flower cross-section (mid-edge 60°-family notches) shared by the
+  case-B morphologies. THREE conversion stays in parts.ts via the new
+  shared `outlineToShape` / `extrudePrism` helpers (existing prism
+  builders refactored onto them, behavior unchanged). Like the growth
+  module, none of this is exported from `src/index.ts`.
 
 ### Added (playground)
 - Growth-path mode as a third input mode (sliders / manual / growth path):
@@ -43,6 +53,31 @@ branch is merged after the 0.2.0 release. The 0.2.0 section below stays frozen.
   form), classification-only (「専用描画なし — 最終条件の形態で表示」), or
   「複合型: —」. Growth imports are deep imports from `src/growth/`,
   header-commented as 3a-temporary (public surface in 0.3.0).
+
+### Fixed
+- Skeletal column (骸晶角柱), sheath (さや), and needle (針) rebuilt on
+  {10-10}-consistent dented-hex ("flower") cross-section extrusions,
+  closing self-audit #4 (c40ec0a): the BoxGeometry skeletons / edge bars
+  (0.55 edge length > 0.4 hex side, interpenetrating at the corners) are
+  removed from all three morphologies.
+  - Skeletal column: flower section R 0.4 / m 0.16 / w 0.08 with full
+    EdgesGeometry; column ends are now real hollows — a core column with
+    highlight-colored cap floors plus two lip rings (hex hole r 0.28,
+    vertices toward the corners). v1's apparent end dimple was an
+    illusion cast by the +0.2 box-crown overhang (its sunken hex meshes
+    were buried inside closed caps, never visible).
+  - Sheath / needle center column: thin-walled flower section m 0.10 /
+    w 0.05 (m + w preserves the v1 0.15 edge-box pitch); the five
+    translucent inner layers are kept; capped end faces adopted (they
+    display the dented cross-section from above).
+  - Needle orientation made explicit: `rotation.y = −φ_i + Θ0`, Θ0 = π/6
+    machine-verified from the CylinderGeometry vertex phase — ≡ 0
+    (mod 60°), so the 12 needles stay bit-identical to v1 (pinned by
+    test).
+  - The public API is untouched — d.ts MD5 unchanged across CP-B2/B3
+    (machine-checked); the rendered Group composition of the three
+    morphologies changed (Boxes removed), which is why this lands as a
+    0.3.0 Fixed entry.
 
 ## [Unreleased] — targeting 0.2.0
 
