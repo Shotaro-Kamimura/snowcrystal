@@ -53,6 +53,17 @@ branch is merged after the 0.2.0 release. The 0.2.0 section below stays frozen.
   form), classification-only (「専用描画なし — 最終条件の形態で表示」), or
   「複合型: —」. Growth imports are deep imports from `src/growth/`,
   header-commented as 3a-temporary (public surface in 0.3.0).
+- Crystallographic annotation layer (case N): an "Annotations" toggle
+  (default OFF) draws c / a-axis arrows, {0001} / {10-1̄0} / {10-1̄1}
+  face labels, and angle arcs (120° interior, 240° dent re-entrant,
+  ±60° side branches, 28.0° pyramidal, 70.3° CSL dihedral) from the
+  documented orientation contract R1–R7, with per-family a-axis phase
+  (Cylinder 30° / outline-builder 0°, finding F1). Labels are
+  CSS2DRenderer DOM on an overlay rect-synced to the canvas (incl.
+  the 768px in-flow layout); placement is computed from convention
+  constants and a seed-1 rng replay — no mesh traversal. Disabled in
+  growth-path mode. The library itself is untouched: dist and d.ts
+  MD5 stay at baseline #3 (machine-checked).
 
 ### Changed
 - **BREAKING (planned for 0.3.0)**: the `Morphology` union expanded with

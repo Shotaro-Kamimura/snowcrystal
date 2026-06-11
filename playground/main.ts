@@ -3,6 +3,7 @@
 // (公開 API 面 = README の不変条件を維持。npm 利用者からは exports "." により不可視)。
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import {
   createSnowCrystal,
   disposeCrystal,
@@ -16,6 +17,15 @@ import {
 } from '../src/index';
 import { renderGrowthPath } from '../src/growth/renderGrowthPath'; // 3a 暫定(深い import、冒頭コメント参照)
 import type { GrowthStage, PathHit } from '../src/growth/types'; // 3a 暫定(同上)
+import { dentedHexOutline } from '../src/geometry/hexOutlineBuilder'; // 案 N: 240° 弧の頂点計算(純関数・表示専用)
+import {
+  ANNOTATIONS,
+  PYRAMID_FACE_ANGLE_FROM_AXIS_RAD,
+  rosetteRepresentativeArm,
+  sidePlaneDihedralArc,
+  type AnnotationSpec,
+  type BilingualText,
+} from './annotations';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Display-only data tables.
@@ -80,6 +90,36 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 // Size is driven by the canvas element's own box (see resizeToCanvas), not the
 // window — so the layout (full-screen on desktop, 56vh block on mobile) controls it.
 
+// 結晶学注記レイヤー(案 N)のラベル描画: CSS2DRenderer を併設(設計書 §2.3)。
+// オーバーレイは pointer-events: none・z-index 5(canvas 0 とパネル 10 の間)で、
+// 固定値でなく canvas.getBoundingClientRect() への矩形同期によりデスクトップ
+// (fixed 全面)・モバイル(文書フロー内 52vh)の両レイアウトに追従する。
+const css2d = new CSS2DRenderer();
+css2d.domElement.style.position = 'fixed';
+css2d.domElement.style.left = '0';
+css2d.domElement.style.top = '0';
+css2d.domElement.style.pointerEvents = 'none';
+css2d.domElement.style.zIndex = '5';
+document.body.appendChild(css2d.domElement);
+
+/** オーバーレイ div を canvas の表示矩形に同期(setSize が width/height style も設定)。 */
+function syncOverlayRect(): void {
+  const rect = canvas.getBoundingClientRect();
+  css2d.domElement.style.left = `${rect.left}px`;
+  css2d.domElement.style.top = `${rect.top}px`;
+  if (rect.width > 0 && rect.height > 0) css2d.setSize(rect.width, rect.height);
+}
+// モバイル(文書フロー内 canvas)のスクロールずれ対策。リサイズ系は resizeToCanvas が担う
+window.addEventListener('scroll', syncOverlayRect, { passive: true });
+
+// 一文注記(裁量 8)の画面固定キャプション(目視ラウンド 1 修正: 3D 追従の
+// CSS2DObject だと真上視点で c 軸ラベルと中央衝突するため、オーバーレイ内の
+// canvas 下端中央に固定する)。表示は updateAnnotations が管理
+const annotCaption = document.createElement('div');
+annotCaption.className = 'annot-caption';
+annotCaption.style.display = 'none';
+css2d.domElement.appendChild(annotCaption);
+
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
@@ -114,6 +154,7 @@ const morphologySelect = document.getElementById('morphology') as HTMLSelectElem
 const modeTag = document.getElementById('mode-tag') as HTMLElement;
 const modeSwitch = document.getElementById('mode-switch') as HTMLElement;
 const modeButtons = Array.from(modeSwitch.querySelectorAll('button'));
+const annotToggle = document.getElementById('annot-toggle') as HTMLInputElement;
 
 const morphJa = document.getElementById('morph-ja') as HTMLElement;
 const morphEn = document.getElementById('morph-en') as HTMLElement;
@@ -179,6 +220,7 @@ function rebuild(): void {
 
   updateInfo();
   drawNakaya();
+  updateAnnotations(); // swap 後の再構築フック(案 N — パスモードでは disabled/非表示)
 }
 
 /**
@@ -206,6 +248,345 @@ function swap(next: THREE.Group): void {
   current = next;
   scene.add(current);
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// 結晶学注記レイヤー(案 N 設計書 §3〜§4)。
+// 配置は ANNOTATIONS(playground/annotations.ts)の方位規約 + 包絡定数からの
+// 計算のみで、メッシュ内部は走査しない(§4.3)。注記一式は annotGroup 1 つに
+// 組み、swap 後に現形態のレコードから再構築する。
+// ─────────────────────────────────────────────────────────────────────────
+
+// 配色(§4.2 候補の採用): c 軸 = ステージ②系 / a 軸 = ステージ①系。
+// 角度弧・角度値はどちらとも被らない琥珀系。
+const ANNOT_C_COLOR = STAGE_COLORS[1];
+const ANNOT_A_COLOR = STAGE_COLORS[0];
+const ANNOT_ARC_COLOR = '#ffb86b';
+
+let annotGroup: THREE.Group | null = null;
+let annotMorph: Morphology | null = null;
+
+/** ja / en 2 行の CSS2DObject ラベル(.annot — 既存パネルと同じ併記様式)。 */
+function annotLabel(ja: string, en?: string, color?: string): CSS2DObject {
+  const div = document.createElement('div');
+  div.className = 'annot';
+  if (color) div.style.color = color;
+  const main = document.createElement('div');
+  main.textContent = ja;
+  div.appendChild(main);
+  if (en) {
+    const sub = document.createElement('div');
+    sub.className = 'annot-en';
+    sub.textContent = en;
+    div.appendChild(sub);
+  }
+  return new CSS2DObject(div);
+}
+
+/** 軸矢印 + 先端ラベル(ArrowHelper — §4.2。長頭化を避けるため頭部をキャップ)。 */
+function annotArrow(
+  group: THREE.Group,
+  dir: THREE.Vector3,
+  origin: THREE.Vector3,
+  length: number,
+  color: string,
+  label: BilingualText | string,
+): void {
+  const headLength = Math.min(0.2 * length, 0.22);
+  const arrow = new THREE.ArrowHelper(dir, origin, length, new THREE.Color(color), headLength, headLength * 0.6);
+  group.add(arrow);
+  const tip = origin.clone().addScaledVector(dir, length + 0.14);
+  const text = typeof label === 'string' ? annotLabel(label, undefined, color) : annotLabel(label.ja, label.en, color);
+  text.position.copy(tip);
+  group.add(text);
+}
+
+/**
+ * 角度弧: EllipseCurve で 2D 弧を生成し、平面基底 (u, n×u) で 3D へ写像した
+ * THREE.Line(§4.2)。u = 開始方向、n = 弧平面の法線、sweepRad = 掃引角(正)。
+ * 弧の中点方向に角度値の CSS2DObject を置く。
+ */
+function annotArc(
+  group: THREE.Group,
+  center: THREE.Vector3,
+  u: THREE.Vector3,
+  n: THREE.Vector3,
+  sweepRad: number,
+  radius: number,
+  labelText: string,
+  labelOffset = 1.45,
+): void {
+  const w = n.clone().cross(u).normalize();
+  const curve = new THREE.EllipseCurve(0, 0, radius, radius, 0, sweepRad, false, 0);
+  const pts = curve
+    .getPoints(48)
+    .map((p) => center.clone().addScaledVector(u, p.x).addScaledVector(w, p.y));
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  group.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: ANNOT_ARC_COLOR })));
+
+  const mid = center
+    .clone()
+    .addScaledVector(u, Math.cos(sweepRad / 2) * radius * labelOffset)
+    .addScaledVector(w, Math.sin(sweepRad / 2) * radius * labelOffset);
+  const label = annotLabel(labelText, undefined, ANNOT_ARC_COLOR);
+  label.position.copy(mid);
+  group.add(label);
+}
+
+/** 2 方向 u1→u2 の最短弧(< 180°)。reflex = true で長周り(240° など)。 */
+function annotArcBetween(
+  group: THREE.Group,
+  center: THREE.Vector3,
+  u1: THREE.Vector3,
+  u2: THREE.Vector3,
+  radius: number,
+  labelText: string,
+  reflex = false,
+  labelOffset = 1.45,
+): void {
+  const angle = u1.angleTo(u2);
+  const n = u1.clone().cross(u2).normalize();
+  if (reflex) {
+    annotArc(group, center, u1, n.negate(), 2 * Math.PI - angle, radius, labelText, labelOffset);
+  } else {
+    annotArc(group, center, u1, n, angle, radius, labelText, labelOffset);
+  }
+}
+
+/** 方位角 az [rad] の XZ 平面単位ベクトル(世界方位 φ = atan2(z, x) — §2.1)。 */
+function azDir(az: number): THREE.Vector3 {
+  return new THREE.Vector3(Math.cos(az), 0, Math.sin(az));
+}
+
+/** c 軸 + a 軸 3 本(R1〜R3。a 軸位相は族で切替)。 */
+function buildStandardAxes(group: THREE.Group, spec: AnnotationSpec): void {
+  const aLen = spec.envelope.radius * 1.3;
+  const cLen = Math.max(spec.envelope.height / 2, spec.envelope.radius) * 1.3;
+  annotArrow(group, new THREE.Vector3(0, 1, 0), new THREE.Vector3(), cLen, ANNOT_C_COLOR, {
+    ja: 'c 軸',
+    en: 'c-axis',
+  });
+  const A_SUB = ['a₁', 'a₂', 'a₃'];
+  for (let k = 0; k < 3; k++) {
+    annotArrow(group, azDir(spec.phaseRad + (k * Math.PI) / 3), new THREE.Vector3(), aLen, ANNOT_A_COLOR, A_SUB[k]);
+  }
+}
+
+/** 面ラベル({0001}・{10-1̄0})— 六角断面の端面中央寄り / 柱面アポセム外側。 */
+function buildFaceLabels(group: THREE.Group, spec: AnnotationSpec): void {
+  if (!spec.hexSection) return;
+  const { radius: rHex, y: yTop } = spec.hexSection;
+  const faceAz = spec.phaseRad + Math.PI / 6; // 面中心方位 = 角頂点 + 30°(両族共通)
+  if (spec.faces.basal) {
+    const label = annotLabel(spec.faces.basal.ja, spec.faces.basal.en);
+    // 0.6R: c 軸ラベルとの中央密集の緩和(目視ラウンド 1 修正)
+    label.position.set(Math.cos(faceAz) * rHex * 0.6, yTop + 0.03, Math.sin(faceAz) * rHex * 0.6);
+    group.add(label);
+  }
+  if (spec.faces.prism) {
+    const apothem = rHex * (Math.sqrt(3) / 2);
+    const label = annotLabel(spec.faces.prism.ja, spec.faces.prism.en);
+    label.position.copy(azDir(faceAz).multiplyScalar(apothem * 1.06));
+    group.add(label);
+  }
+}
+
+/** 内角 120° 弧 — 角頂点(方位 = 族位相)の端面上。 */
+function buildInteriorArc(group: THREE.Group, spec: AnnotationSpec): void {
+  if (!spec.hexSection) return;
+  const { radius: rHex, y } = spec.hexSection;
+  const yTop = y + 0.02;
+  const vertexAz = spec.phaseRad;
+  const p = (az: number): THREE.Vector3 =>
+    new THREE.Vector3(Math.cos(az) * rHex, yTop, Math.sin(az) * rHex);
+  const v = p(vertexAz);
+  const u1 = p(vertexAz + Math.PI / 3).sub(v).normalize();
+  const u2 = p(vertexAz - Math.PI / 3).sub(v).normalize();
+  annotArcBetween(group, v, u1, u2, rHex * 0.3, '120°');
+}
+
+/**
+ * 凹角 240° 弧 — 花形断面(dentedHexOutline)の溝床コーナー(設計書 §3 案 B 3 形態)。
+ * アウトラインは CCW・断面方位保存(dentedHexColumn の rotateX 規約)なので、
+ * 2D (x, y) → 世界 (x, ·, y) に写し、右折頂点(反時計回りで cross < 0)を凹角とする。
+ */
+function buildReflexArc(group: THREE.Group, spec: AnnotationSpec): void {
+  if (!spec.hexSection || !spec.dent) return;
+  const { radius: rHex, y } = spec.hexSection;
+  const pts = dentedHexOutline(rHex, spec.dent.m, spec.dent.w);
+  for (let i = 0; i < pts.length; i++) {
+    const prev = pts[(i - 1 + pts.length) % pts.length];
+    const v = pts[i];
+    const next = pts[(i + 1) % pts.length];
+    const cross =
+      (v[0] - prev[0]) * (next[1] - v[1]) - (v[1] - prev[1]) * (next[0] - v[0]);
+    if (cross >= 0) continue; // 左折(内角 120°)はスキップ — 最初の右折 = 凹角 240°
+    const yTop = y + 0.02;
+    const center = new THREE.Vector3(v[0], yTop, v[1]);
+    const u1 = new THREE.Vector3(prev[0] - v[0], 0, prev[1] - v[1]).normalize();
+    const u2 = new THREE.Vector3(next[0] - v[0], 0, next[1] - v[1]).normalize();
+    annotArcBetween(group, center, u1, u2, Math.min(spec.dent.m, spec.dent.w) * 0.8, '240°', true, 2.4);
+    return;
+  }
+}
+
+/** 副枝 ±60° 弧 — 代表腕(+Z、i = 0)の最外接合点(R5)。 */
+function buildSideBranchArcs(group: THREE.Group, spec: AnnotationSpec): void {
+  if (spec.sideBranchJunctionZ === undefined) return;
+  const center = new THREE.Vector3(0, 0.07, spec.sideBranchJunctionZ);
+  const uMain = new THREE.Vector3(0, 0, 1); // 主枝方向(先端側)
+  for (const arc of spec.arcs) {
+    if (arc.kind !== 'sideBranch') continue;
+    const az = Math.PI / 2 + (arc.deg * Math.PI) / 180; // 副枝方位 = 主枝 90° ± 60°
+    annotArcBetween(group, center, uMain, azDir(az), 0.32, `${arc.deg > 0 ? '+' : '−'}60°`);
+  }
+}
+
+/** 砲弾集合(R6): 代表 1 腕の c 軸 + {10-1̄1} + 28.0° 弧(裁量 3)。 */
+function buildRosetteAnnotations(group: THREE.Group, spec: AnnotationSpec): void {
+  const arm = rosetteRepresentativeArm();
+  const axis = new THREE.Vector3(...arm.axis);
+  const apex = axis.clone().multiplyScalar(-arm.apexOffset);
+
+  annotArrow(group, axis, apex, arm.armLength * 1.3, ANNOT_C_COLOR, {
+    ja: 'c 軸(代表腕)',
+    en: 'c-axis (one arm)',
+  });
+
+  // 錐面アポセム方向: 腕ローカルで方位 −roll(rotateY ロール込みの実方位)・
+  // 軸から 28.0°。quaternion(+Y → 腕方位)で世界系へ
+  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis);
+  const a0 = -arm.rollRad;
+  const sin28 = Math.sin(PYRAMID_FACE_ANGLE_FROM_AXIS_RAD);
+  const cos28 = Math.cos(PYRAMID_FACE_ANGLE_FROM_AXIS_RAD);
+  const slant = new THREE.Vector3(sin28 * Math.cos(a0), cos28, sin28 * Math.sin(a0))
+    .applyQuaternion(q)
+    .normalize();
+
+  // 錐面の稜線(apex → 底辺中点)を引いて 28.0° のもう一辺を見せる
+  const slantEnd = apex.clone().addScaledVector(slant, arm.pyramidFaceLength);
+  const legGeo = new THREE.BufferGeometry().setFromPoints([apex.clone(), slantEnd]);
+  group.add(new THREE.Line(legGeo, new THREE.LineBasicMaterial({ color: ANNOT_ARC_COLOR })));
+
+  annotArcBetween(group, apex, axis, slant, arm.pyramidFaceLength * 0.72, '28.0°');
+
+  if (spec.faces.pyramidal) {
+    const label = annotLabel(spec.faces.pyramidal.ja, spec.faces.pyramidal.en);
+    label.position.copy(apex.clone().addScaledVector(slant, arm.pyramidFaceLength * 1.18));
+    group.add(label);
+  }
+}
+
+/** 側面(R7): スパイン = a 軸 ∥ +Y + 二面角 70.3° 弧(裁量 3)。 */
+function buildSidePlaneAnnotations(group: THREE.Group, spec: AnnotationSpec): void {
+  const spineLen = (spec.envelope.height / 2) * 1.3;
+  annotArrow(group, new THREE.Vector3(0, 1, 0), new THREE.Vector3(), spineLen, ANNOT_A_COLOR, {
+    ja: 'a 軸(スパイン)',
+    en: 'a-axis (spine)',
+  });
+
+  // フィンは rotation.y = ρ で配置され世界方位は −ρ(方位シフト規約)。
+  // 実フィン角から CSL アンカー 70.3° の弧を張る(annotations.ts 参照)
+  const arc = sidePlaneDihedralArc();
+  const azFrom = (-arc.fromRotationDeg * Math.PI) / 180;
+  const azTo = (-arc.toRotationDeg * Math.PI) / 180;
+  const center = new THREE.Vector3(0, 0.45, 0);
+  annotArcBetween(group, center, azDir(azFrom), azDir(azTo), spec.envelope.radius * 0.62, '70.3°', false, 1.25);
+}
+
+/** 現形態の注記グループをレコード(ANNOTATIONS)から構築する。 */
+function buildAnnotationGroup(morph: Morphology): THREE.Group {
+  const spec = ANNOTATIONS[morph];
+  const group = new THREE.Group();
+
+  if (spec.axes === 'standard') {
+    buildStandardAxes(group, spec);
+    buildFaceLabels(group, spec);
+    if (spec.arcs.some((a) => a.kind === 'interior')) buildInteriorArc(group, spec);
+    if (spec.arcs.some((a) => a.kind === 'reflex')) buildReflexArc(group, spec);
+    buildSideBranchArcs(group, spec);
+  } else if (spec.axes === 'rosette') {
+    buildRosetteAnnotations(group, spec);
+  } else {
+    buildSidePlaneAnnotations(group, spec);
+  }
+
+  return group;
+}
+
+/** 一文注記キャプションの内容更新(note なしの形態・非表示時は隠す)。 */
+function renderAnnotCaption(note: BilingualText | undefined): void {
+  if (!note) {
+    annotCaption.style.display = 'none';
+    return;
+  }
+  annotCaption.replaceChildren();
+  const ja = document.createElement('div');
+  ja.textContent = note.ja;
+  const en = document.createElement('div');
+  en.className = 'annot-en';
+  en.textContent = note.en;
+  annotCaption.append(ja, en);
+  annotCaption.style.display = '';
+}
+
+/**
+ * 可視切替。CSS2DRenderer はラベル自身の visible しか見ない(親グループの
+ * 非表示は波及しない)ため、ラベルにも明示的に反映する。
+ */
+function setAnnotVisible(visible: boolean): void {
+  if (!annotGroup) return;
+  annotGroup.visible = visible;
+  annotGroup.traverse((obj) => {
+    if (obj instanceof CSS2DObject) obj.visible = visible;
+  });
+}
+
+/** レコード切替時の破棄。CSS2D ラベルの DOM 要素も明示的に取り除く。 */
+function disposeAnnotations(): void {
+  if (!annotGroup) return;
+  annotGroup.traverse((obj) => {
+    if (obj instanceof CSS2DObject) {
+      obj.element.remove();
+      return;
+    }
+    const withGeo = obj as THREE.Mesh | THREE.Line;
+    if (withGeo.geometry) withGeo.geometry.dispose();
+    const material = (withGeo as { material?: THREE.Material | THREE.Material[] }).material;
+    if (Array.isArray(material)) {
+      for (const m of material) m.dispose();
+    } else if (material) {
+      material.dispose();
+    }
+  });
+  scene.remove(annotGroup);
+  annotGroup = null;
+  annotMorph = null;
+}
+
+/**
+ * swap 後・トグル操作・モード切替の合流点。
+ * パスモードは対象外(裁量 2): トグルを disabled にし注記も隠す。
+ * トグル OFF は visible = false(dispose はレコード切替時のみ)。
+ */
+function updateAnnotations(): void {
+  annotToggle.disabled = mode === 'path';
+  const want = annotToggle.checked && mode !== 'path';
+  if (!want) {
+    setAnnotVisible(false);
+    renderAnnotCaption(undefined); // トグル OFF / パスモードはキャプションも非表示
+    return;
+  }
+  if (!annotGroup || annotMorph !== currentMorph) {
+    disposeAnnotations();
+    annotGroup = buildAnnotationGroup(currentMorph);
+    annotMorph = currentMorph;
+    scene.add(annotGroup);
+  }
+  setAnnotVisible(true);
+  renderAnnotCaption(ANNOTATIONS[currentMorph].note);
+}
+
+annotToggle.addEventListener('change', updateAnnotations);
 
 // ─────────────────────────────────────────────────────────────────────────
 // Info panel
@@ -778,6 +1159,7 @@ function resizeToCanvas(): void {
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  syncOverlayRect(); // css2d.setSize + 注記オーバーレイの矩形同期(案 N)
 }
 
 const ro = new ResizeObserver(resizeToCanvas);
@@ -791,6 +1173,7 @@ function animate(): void {
   requestAnimationFrame(animate);
   controls.update();
   renderer.render(scene, camera);
+  css2d.render(scene, camera); // 注記ラベル(案 N)
 }
 
 resizeToCanvas();

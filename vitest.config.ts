@@ -5,6 +5,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    // playground/annotations.test.ts は案 N の注記対応表テスト(設計書 §5 裁量 5 (a)。
+    // playground 内で完結し src のテスト集合には影響しない)
+    include: ['src/**/*.test.ts', 'playground/**/*.test.ts'],
   },
 });
