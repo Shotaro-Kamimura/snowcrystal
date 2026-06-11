@@ -12,23 +12,46 @@ import { sampleRosetteAxes } from './rosette';
 // (main-fixed.js); the remaining builders are crystallography-based
 // reimplementations on top of src/geometry/crystallography.ts.
 
+/**
+ * 2D アウトライン点列 → THREE.Shape(moveTo/lineTo/closePath の共通イディオム)。
+ * crystallography.ts / hexOutlineBuilder.ts の点列(THREE 非依存層)を
+ * THREE へ持ち込む唯一の入口(設計書 docs/geometry-caseB-design.md §1.5)。
+ */
+export function outlineToShape(
+  points: ReadonlyArray<readonly [number, number]>,
+): THREE.Shape {
+  const shape = new THREE.Shape();
+  shape.moveTo(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) {
+    shape.lineTo(points[i][0], points[i][1]);
+  }
+  shape.closePath();
+  return shape;
+}
+
+/**
+ * アウトラインを高さ height で押し出し、厚み中心を z = 0 に合わせたプリズム。
+ * (ExtrudeGeometry, bevel なし — 既存イディオムの共通化、挙動不変)
+ */
+export function extrudePrism(
+  points: ReadonlyArray<readonly [number, number]>,
+  height: number,
+): THREE.ExtrudeGeometry {
+  const geometry = new THREE.ExtrudeGeometry(outlineToShape(points), {
+    depth: height,
+    bevelEnabled: false,
+  });
+  geometry.translate(0, 0, -height / 2); // 厚み中心合わせ
+  return geometry;
+}
+
 /** elongatedHexOutline を押し出した伸長六角形プリズム（原点 = 基部頂点、長軸 = +Y）。 */
 export function createElongatedHexPrism(
   width: number,
   length: number,
   thickness: number,
 ): THREE.Mesh {
-  const outline = elongatedHexOutline(width, length);
-  const shape = new THREE.Shape();
-  shape.moveTo(outline[0][0], outline[0][1]);
-  for (let i = 1; i < outline.length; i++) {
-    shape.lineTo(outline[i][0], outline[i][1]);
-  }
-  shape.closePath();
-
-  const geometry = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
-  geometry.translate(0, 0, -thickness / 2); // 厚み中心合わせ
-
+  const geometry = extrudePrism(elongatedHexOutline(width, length), thickness);
   const material = new THREE.MeshStandardMaterial({ color: COLORS.wing, flatShading: true });
   return new THREE.Mesh(geometry, material);
 }
@@ -117,18 +140,10 @@ export function createBulletRosette(
  * (アウトラインのスパインは a 軸 [1,0] 沿いなので −90° 回転で立てる)。
  */
 export function createSideFin(circumradius: number): THREE.Mesh {
-  const outline = halfHexOutline(circumradius);
-  const shape = new THREE.Shape();
-  shape.moveTo(outline[0][0], outline[0][1]);
-  for (let i = 1; i < outline.length; i++) {
-    shape.lineTo(outline[i][0], outline[i][1]);
-  }
-  shape.closePath();
-
   const thickness = 0.05 * circumradius;
-  const geometry = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
+  // extrudePrism の厚み中心合わせ(z 平行移動)と rotateZ は成分直交のため可換
+  const geometry = extrudePrism(halfHexOutline(circumradius), thickness);
   geometry.rotateZ(-Math.PI / 2); // スパイン [±R,0] → (0,∓R)、フィン +y → +X 側
-  geometry.translate(0, 0, -thickness / 2); // 厚み中心合わせ
 
   const material = new THREE.MeshStandardMaterial({ color: COLORS.wing, flatShading: true });
   return new THREE.Mesh(geometry, material);
