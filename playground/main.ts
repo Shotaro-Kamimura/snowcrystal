@@ -34,6 +34,9 @@ const LABELS: Record<Morphology, { ja: string; en: string }> = {
   樹枝状: { ja: '樹枝状', en: 'Dendrite' },
   砲弾集合: { ja: '砲弾集合', en: 'Combination of Bullets' },
   側面: { ja: '側面', en: 'Side Planes' },
+  星状: { ja: '星状', en: 'Stellar Crystal' },
+  羊歯: { ja: '羊歯', en: 'Fernlike Crystal' },
+  長柱: { ja: '長柱', en: 'Long Solid Column' },
 };
 
 // Global-classification lineage per code (mirrors FULL_SUBTYPE_MAP for display).

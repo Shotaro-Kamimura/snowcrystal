@@ -262,27 +262,75 @@ export function createSidePlanes(
   return group;
 }
 
-export function createBranchWithChildren(angleRad: number): THREE.Group {
+/**
+ * 樹枝状の腕のパラメタ族(案 M 設計書 §3.1)。省略時は DENDRITE_ARM_DEFAULTS。
+ * 星状(P1d)= sideCount 0 / 羊歯(P1f)= 副枝を密・長めに。
+ */
+export interface DendriteArmOptions {
+  /** 主枝幅 */
+  mainWidth?: number;
+  /** 主枝長 */
+  mainLength?: number;
+  /** 主枝厚 */
+  mainThickness?: number;
+  /** 副枝対数(0 = なし) */
+  sideCount?: number;
+  /** 副枝間隔 */
+  sideSpacing?: number;
+  /** 先頭副枝の位置係数(offsetZ = spacing·(i + sideStart)) */
+  sideStart?: number;
+  /** 副枝幅 */
+  sideWidth?: number;
+  /** 副枝長 */
+  sideLength?: number;
+  /** 副枝厚 */
+  sideThickness?: number;
+}
+
+/**
+ * 現行の樹枝状(P1e)の腕パラメタ(v1 由来の採用値そのまま)。
+ * 樹枝状の出力ビット不変の基準値 — 値の変更は見た目回帰になるため
+ * vitest でリテラル固定する(針の rotation.y 方式。案 M 設計書 §3.1・§5)。
+ * 案 M 内部 API — src/index.ts には export しない。
+ */
+export const DENDRITE_ARM_DEFAULTS = {
+  mainWidth: 0.08,
+  mainLength: 2.1,
+  mainThickness: 0.08,
+  sideCount: 3,
+  sideSpacing: 0.5,
+  sideStart: 1.5,
+  sideWidth: 0.3,
+  sideLength: 0.6,
+  sideThickness: 0.05,
+} as const;
+
+export function createBranchWithChildren(
+  angleRad: number,
+  opts: DendriteArmOptions = {},
+): THREE.Group {
+  // デフォルトマージのみ — 生成順・演算順は不変(樹枝状はビット同一、設計書 §3.1)
+  const p = { ...DENDRITE_ARM_DEFAULTS, ...opts };
   const group = new THREE.Group();
 
   // 主枝（伸長六角形プリズム: 先端120°ファセット）。基部頂点 = 原点で中心柱内に隠れ、
   // 長さ2.1により先端 z=2.1 が最外副枝の先端 z=2.05 を 0.05 リードする
-  const mainBranch = createElongatedHexPrism(0.08, 2.1, 0.08);
+  const mainBranch = createElongatedHexPrism(p.mainWidth, p.mainLength, p.mainThickness);
   mainBranch.rotation.x = Math.PI / 2; // XZ平面に寝かせ、長軸 = +Z
 
   group.add(mainBranch);
 
   // 副枝の数と間隔
-  const sideCount = 3;
-  const spacing = 0.5;
-  const joinX = 0.04; // 主枝（伸長六角形プリズム width 0.08）の半幅 = 主枝平行側面上の接合点
+  const sideCount = p.sideCount;
+  const spacing = p.sideSpacing;
+  const joinX = p.mainWidth / 2; // 主枝の半幅 = 主枝平行側面上の接合点(既定 0.08/2 = 0.04)
 
   for (let i = 0; i < sideCount; i++) {
-    const offsetZ = spacing * (i + 1.5);
+    const offsetZ = spacing * (i + p.sideStart);
 
     // 左右の副枝（伸長六角形プリズム: 全内角120°・対辺平行）
-    const petalL = createElongatedHexPrism(0.3, 0.6, 0.05);
-    const petalR = createElongatedHexPrism(0.3, 0.6, 0.05);
+    const petalL = createElongatedHexPrism(p.sideWidth, p.sideLength, p.sideThickness);
+    const petalR = createElongatedHexPrism(p.sideWidth, p.sideLength, p.sideThickness);
 
     // XZ平面上に寝かせ、長軸の先端を主枝の先端側（外向き）へ±60°で開く
     // （結晶学的に副枝は隣接a軸に平行 = 主枝に対し±60°、開き120°）。

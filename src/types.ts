@@ -10,7 +10,10 @@ export type Morphology =
   | '扇形'
   | '樹枝状'
   | '砲弾集合'
-  | '側面';
+  | '側面'
+  | '星状'
+  | '羊歯'
+  | '長柱';
 
 export interface CrystalParams {
   /** Primary generation key (9 types). */

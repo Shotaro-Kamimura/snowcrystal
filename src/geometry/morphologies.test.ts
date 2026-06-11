@@ -1,8 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { THREE } from '../three';
 import { COLORS } from '../classify';
-import { buildMorphology, DENT_DIMS } from './morphologies';
+import {
+  buildMorphology,
+  DENT_DIMS,
+  STELLAR_ARM_PARAMS,
+  FERNLIKE_ARM_PARAMS,
+  LONG_COLUMN_DIMS,
+} from './morphologies';
 import { dentedHexOutline } from './hexOutlineBuilder';
+import { DENDRITE_ARM_DEFAULTS } from './parts';
 import { mulberry32 } from '../random';
 
 // 案 B CP-B3 形態系テスト(設計書 docs/geometry-caseB-design.md §4-4)。
@@ -87,7 +94,7 @@ function disposeGroup(group: THREE.Group): void {
   });
 }
 
-/** 形状署名: 種別・位置・Y 回転・Cylinder 高さ(seed 決定性の比較用)。 */
+/** 形状署名: 種別・位置・Y/Z 回転・Cylinder 高さ(seed 決定性の比較用)。 */
 function shapeSignature(group: THREE.Group): string {
   const parts: string[] = [];
   group.traverse((o) => {
@@ -101,11 +108,44 @@ function shapeSignature(group: THREE.Group): string {
         m.geometry?.type ?? '-',
         o.position.toArray().map((n) => n.toFixed(12)).join(','),
         o.rotation.y.toFixed(12),
+        o.rotation.z.toFixed(12),
         params?.height?.toFixed(12) ?? '-',
       ].join('|'),
     );
   });
   return parts.join('\n');
+}
+
+/** 樹枝状族の腕グループ(直下の Group)を取り出す。 */
+function armsOf(group: THREE.Group): THREE.Group[] {
+  return group.children.filter((c): c is THREE.Group => c.type === 'Group');
+}
+
+/** 樹枝状族の中心六角板が共通寸法 CylinderGeometry(0.5, 0.5, 0.2, 6)・COLORS.base であること。 */
+function expectDendriteCenter(group: THREE.Group): void {
+  const center = group.children[0] as THREE.Mesh;
+  expect(center.isMesh).toBe(true);
+  const p = (center.geometry as THREE.CylinderGeometry).parameters;
+  expect(p.radiusTop).toBe(0.5);
+  expect(p.radiusBottom).toBe(0.5);
+  expect(p.height).toBe(0.2);
+  expect(p.radialSegments).toBe(6);
+  expect((center.material as THREE.MeshStandardMaterial).color.getHex()).toBe(
+    new THREE.Color(COLORS.base).getHex(),
+  );
+}
+
+/**
+ * 副枝対の検証: [L, R] の順で L = (−0.04, +60°) / R = (+0.04, −60°)
+ * (先端外向き・主枝側面に密着 — 符号の対応まで固定する)。
+ */
+function expectPetalPairs(petals: THREE.Mesh[], expectZ: number[]): void {
+  petals.forEach((p, k) => {
+    const left = k % 2 === 0;
+    expect(p.position.x).toBe(left ? -0.04 : 0.04); // 主枝半幅 0.08/2(二進で厳密)
+    expect(p.rotation.z).toBeCloseTo(left ? Math.PI / 3 : -Math.PI / 3, 12); // 先端外向き ±60°
+    expect(p.position.z).toBeCloseTo(expectZ[k], 12);
+  });
 }
 
 describe('案B 形態系 — 骸晶角柱・さや・針(設計書 §4-4)', () => {
@@ -245,5 +285,106 @@ describe('案B 形態系 — 骸晶角柱・さや・針(設計書 §4-4)', () =
     const sig8 = shapeSignature(buildMorphology('針', mulberry32(8)));
     expect(sig7a).toBe(sig7b);
     expect(sig7a).not.toBe(sig8);
+  });
+});
+
+describe('案M 形態系 — 星状・羊歯・長柱(設計書 §5)', () => {
+  it('g. 樹枝状ビット不変: DENDRITE_ARM_DEFAULTS が現行値リテラルと一致(針 rotation.y 方式)', () => {
+    expect(DENDRITE_ARM_DEFAULTS).toEqual({
+      mainWidth: 0.08,
+      mainLength: 2.1,
+      mainThickness: 0.08,
+      sideCount: 3,
+      sideSpacing: 0.5,
+      sideStart: 1.5,
+      sideWidth: 0.3,
+      sideLength: 0.6,
+      sideThickness: 0.05,
+    });
+  });
+
+  it('h. 樹枝状の構造署名: 中心 1 + 腕 6(各 = 主枝 1 + 副枝 3 対)・offsetZ/±60°/接合 ±0.04 が現行構成と一致', () => {
+    const group = buildMorphology('樹枝状', mulberry32(42));
+    expectDendriteCenter(group);
+    const arms = armsOf(group);
+    expect(arms).toHaveLength(6);
+    expect(meshesOf(group)).toHaveLength(1 + 6 * 7); // 中心 1 + 腕 6 ×(主枝 1 + 副枝 3 対)
+
+    const expectZ = [0.75, 0.75, 1.25, 1.25, 1.75, 1.75]; // spacing 0.5 × (i + 1.5)
+    arms.forEach((arm, i) => {
+      expect(arm.rotation.y).toBeCloseTo(-(i * Math.PI) / 3, 12);
+      const meshes = arm.children.filter((c): c is THREE.Mesh => (c as THREE.Mesh).isMesh);
+      expect(meshes).toHaveLength(7);
+      meshes.forEach((m) => expect(m.geometry.type).toBe('ExtrudeGeometry'));
+      expectPetalPairs(meshes.slice(1), expectZ); // [0] = 主枝、以降 L/R の対(符号まで固定)
+    });
+  });
+
+  it('i. 星状: 各腕 = 主枝のみ(副枝 0)・主枝ジオメトリは樹枝状とビット同一', () => {
+    expect(STELLAR_ARM_PARAMS).toEqual({ sideCount: 0 }); // 最小差分(裁量 2)
+    const stellar = buildMorphology('星状', mulberry32(42));
+    expectDendriteCenter(stellar);
+    const arms = armsOf(stellar);
+    expect(arms).toHaveLength(6);
+    expect(meshesOf(stellar)).toHaveLength(1 + 6); // 中心 1 + 主枝 6
+    arms.forEach((arm, i) => {
+      expect(arm.rotation.y).toBeCloseTo(-(i * Math.PI) / 3, 12);
+      expect(arm.children).toHaveLength(1);
+    });
+
+    // 主枝の押し出し頂点列が樹枝状の主枝と完全一致(寸法共通の機械検証)
+    const dendrite = buildMorphology('樹枝状', mulberry32(42));
+    const mainOf = (g: THREE.Group) =>
+      (armsOf(g)[0].children[0] as THREE.Mesh).geometry.getAttribute('position')
+        .array as Float32Array;
+    expect(Array.from(mainOf(stellar))).toEqual(Array.from(mainOf(dendrite)));
+  });
+
+  it('j. 羊歯: 各腕 = 主枝 1 + 副枝 5 対(offsetZ 0.3〜1.5)・±60°・接合 ±0.04', () => {
+    expect(FERNLIKE_ARM_PARAMS).toEqual({
+      sideCount: 5,
+      sideSpacing: 0.3,
+      sideStart: 1.0,
+      sideLength: 0.75,
+      sideWidth: 0.22,
+    }); // 裁量 3(確定は目視ラウンド)
+    const group = buildMorphology('羊歯', mulberry32(42));
+    expectDendriteCenter(group);
+    const arms = armsOf(group);
+    expect(arms).toHaveLength(6);
+    expect(meshesOf(group)).toHaveLength(1 + 6 * 11); // 中心 1 + 腕 6 ×(主枝 1 + 副枝 5 対)
+
+    const expectZ = [0.3, 0.3, 0.6, 0.6, 0.9, 0.9, 1.2, 1.2, 1.5, 1.5]; // spacing 0.3 × (i + 1.0)
+    for (const arm of arms) {
+      const meshes = arm.children.filter((c): c is THREE.Mesh => (c as THREE.Mesh).isMesh);
+      expect(meshes).toHaveLength(11);
+      expectPetalPairs(meshes.slice(1), expectZ); // 接合点は主枝半幅(羊歯でも主枝幅は既定)
+    }
+  });
+
+  it('k. 長柱: R 0.25 / H 2.0(案 1、H/D = 4.0)・6 分割・EdgesGeometry 付き', () => {
+    expect(LONG_COLUMN_DIMS).toEqual({ radius: 0.25, height: 2.0 }); // 裁量 4 = 案 1
+    const group = buildMorphology('長柱', mulberry32(42));
+
+    const meshes = meshesOf(group);
+    expect(meshes).toHaveLength(1);
+    const p = (meshes[0].geometry as THREE.CylinderGeometry).parameters;
+    expect(p.radiusTop).toBe(LONG_COLUMN_DIMS.radius);
+    expect(p.radiusBottom).toBe(LONG_COLUMN_DIMS.radius);
+    expect(p.height).toBe(LONG_COLUMN_DIMS.height);
+    expect(p.radialSegments).toBe(6);
+    expect(p.height / (2 * p.radiusTop)).toBeCloseTo(4.0, 12); // H/D
+
+    const edges = geometriesOf(group).filter((g) => g.type === 'EdgesGeometry');
+    expect(edges).toHaveLength(1);
+  });
+
+  it('l. 新 3 形態: dispose 正常・同一 seed → 同一形状', () => {
+    for (const t of ['星状', '羊歯', '長柱'] as const) {
+      expect(() => disposeGroup(buildMorphology(t, mulberry32(7)))).not.toThrow();
+      const a = shapeSignature(buildMorphology(t, mulberry32(7)));
+      const b = shapeSignature(buildMorphology(t, mulberry32(7)));
+      expect(a).toBe(b);
+    }
   });
 });

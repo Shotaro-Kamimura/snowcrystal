@@ -102,8 +102,8 @@ const REGIONS: Readonly<Record<string, DiagramRegion>> = {
   'ml66/P1d': {
     id: 'ml66/P1d',
     mlCode: 'P1d',
-    morphology: '樹枝状',
-    fidelity: 'approx',
+    morphology: '星状',
+    fidelity: 'exact',
     labelJa: '星状',
     source:
       'ML66 Fig.2(デジタイズ済・赤スケッチ)。水飽和直上への移動はユーザーのスケッチ同定(赤枠=P1d)による 2026-06-10 修正',
@@ -121,8 +121,8 @@ const REGIONS: Readonly<Record<string, DiagramRegion>> = {
   'ml66/P1f': {
     id: 'ml66/P1f',
     mlCode: 'P1f',
-    morphology: '樹枝状',
-    fidelity: 'approx',
+    morphology: '羊歯',
+    fidelity: 'exact',
     labelJa: '羊歯',
     source: 'provisional',
     confidence: 'low',
@@ -157,8 +157,8 @@ const REGIONS: Readonly<Record<string, DiagramRegion>> = {
   'ml66/N1e': {
     id: 'ml66/N1e',
     mlCode: 'N1e',
-    morphology: '角柱',
-    fidelity: 'approx',
+    morphology: '長柱',
+    fidelity: 'exact',
     labelJa: '長柱',
     source: 'ML66 §3.1(Shimizu)',
     confidence: 'mid',

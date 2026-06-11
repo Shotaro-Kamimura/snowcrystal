@@ -15,7 +15,7 @@ describe('ML66 ゴールデン(一次資料アンカー)', () => {
       [-7, 1.2, 'さや'],
       [-9, 1.2, '骸晶角柱'],
       [-15, 0.9, '扇形'], // 広幅枝(P1c)領域 → 描画は扇形(2026-06-10 修正で挿入)
-      [-15, 1.05, '樹枝状'], // 星状(P1d)領域 → 描画は樹枝状(水飽和直上へ移動後)
+      [-15, 1.05, '星状'], // 星状(P1d)領域 → 専用描画(案 M、CP-M2 で樹枝状近似を解消)
       [-12, 1.2, '骸晶角板'], // 隣接バンド (−13,−10] は非変更(不変確認)
       [-2, 0.5, '角板'],
       [-22, 0.3, '角柱'], // 対角線の下(t=−22 で sTop ≈ 0.32)
@@ -24,7 +24,7 @@ describe('ML66 ゴールデン(一次資料アンカー)', () => {
       [-23, 1.8, '側面'], // S1(水飽和の上、ML66 原典忠実)
       [-27, 0.7, '角柱'], // 対角線の下(t=−27 で sTop = 0.745)
       [-27, 0.9, '骸晶角柱'], // C1f
-      [-33, 0.5, '角柱'], // 長柱(N1e)領域
+      [-33, 0.5, '長柱'], // 長柱(N1e)領域 → 専用描画(案 M、CP-M2 で角柱近似を解消)
       [-33, 1.2, '砲弾集合'],
       [-33, 1.8, '側面'], // S2
       [-38, 1.8, '砲弾集合'], // S2 は −35 まで。−35 以深の最上段は C2a
@@ -42,7 +42,7 @@ describe('ML66 ゴールデン(一次資料アンカー)', () => {
     expect(hit.region.id).toBe('ml66/P1e');
   });
 
-  it('a. 領域メタデータ: 広幅枝は P1c/approx、星状は P1d/approx、長柱は labelJa付きの角柱', () => {
+  it('a. 領域メタデータ: 広幅枝は P1c/approx、星状は P1d/exact(案 M)、長柱は labelJa付きの専用形態', () => {
     const kouhaba = classifyOnDiagram(-15, vaporAt(-15, 0.9), ML66);
     expect(kouhaba.mlCode).toBe('P1c');
     expect(kouhaba.region.fidelity).toBe('approx');
@@ -50,13 +50,50 @@ describe('ML66 ゴールデン(一次資料アンカー)', () => {
 
     const hoshi = classifyOnDiagram(-15, vaporAt(-15, 1.05), ML66);
     expect(hoshi.mlCode).toBe('P1d');
-    expect(hoshi.region.fidelity).toBe('approx');
-    expect(hoshi.morphology).toBe('樹枝状');
+    expect(hoshi.region.fidelity).toBe('exact');
+    expect(hoshi.morphology).toBe('星状');
 
     const naga = classifyOnDiagram(-33, vaporAt(-33, 0.5), ML66);
     expect(naga.mlCode).toBe('N1e');
     expect(naga.region.labelJa).toBe('長柱');
-    expect(naga.morphology).toBe('角柱');
+    expect(naga.morphology).toBe('長柱');
+  });
+
+  it('d. 案M 領域割当: P1d → 星状 / P1f → 羊歯 / N1e → 長柱、fidelity exact(labelJa・source・confidence 不変)', () => {
+    const p1d = ML66.regions['ml66/P1d'];
+    expect(p1d.morphology).toBe('星状');
+    expect(p1d.fidelity).toBe('exact');
+    expect(p1d.labelJa).toBe('星状');
+    expect(p1d.source).toBe(
+      'ML66 Fig.2(デジタイズ済・赤スケッチ)。水飽和直上への移動はユーザーのスケッチ同定(赤枠=P1d)による 2026-06-10 修正',
+    ); // 2026-06-10 修正の経緯を記録する文字列 — 退行検知のため固定
+    expect(p1d.confidence).toBe('mid');
+
+    const p1f = ML66.regions['ml66/P1f'];
+    expect(p1f.morphology).toBe('羊歯');
+    expect(p1f.fidelity).toBe('exact');
+    expect(p1f.labelJa).toBe('羊歯');
+    expect(p1f.source).toBe('provisional'); // 図上範囲の確度は据え置き(設計書 §3.3・裁量 6)
+    expect(p1f.confidence).toBe('low');
+
+    const n1e = ML66.regions['ml66/N1e'];
+    expect(n1e.morphology).toBe('長柱');
+    expect(n1e.fidelity).toBe('exact');
+    expect(n1e.labelJa).toBe('長柱');
+    expect(n1e.source).toBe('ML66 §3.1(Shimizu)');
+  });
+
+  it('d. 案M 目視定番ゴールデン: 星状 (−15, 0.23) P1d / 羊歯 (−16, 0.29) P1f / 長柱 (−33, 0.05) N1e', () => {
+    const cases = [
+      [-15, 0.23, 'ml66/P1d', '星状'],
+      [-16, 0.29, 'ml66/P1f', '羊歯'],
+      [-33, 0.05, 'ml66/N1e', '長柱'],
+    ] as const;
+    for (const [t, v, regionId, morph] of cases) {
+      const hit = classifyOnDiagram(t, v, ML66);
+      expect(hit.region.id, `(${t}, ${v})`).toBe(regionId);
+      expect(hit.morphology).toBe(morph);
+    }
   });
 
   it('b. 対角線の連続性: C1e の sTop が T=−25 で両隣バンドから一致(0.575)', () => {

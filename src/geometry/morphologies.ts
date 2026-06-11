@@ -8,8 +8,56 @@ import {
   createSidePlanes,
   extrudePrism,
   outlineToShape,
+  type DendriteArmOptions,
 } from './parts';
 import { dentedHexOutline } from './hexOutlineBuilder';
+
+/**
+ * 星状(P1d)の腕パラメタ(案 M 設計書 §3.1・裁量 2)。
+ * 細い 6 本主枝・副枝なし — 最小差分(主枝・中心は樹枝状と共通)。
+ * テストから参照する内部 export(src/index.ts には追加しない)。
+ */
+export const STELLAR_ARM_PARAMS: DendriteArmOptions = { sideCount: 0 };
+
+/**
+ * 羊歯(P1f)の腕パラメタ(案 M 設計書 §3.1・裁量 3)。副枝を密(5 対・間隔 0.3、
+ * offsetZ = 0.3〜1.5)・長め(0.75)・細め(0.22)にしたシダの羽状感。
+ * 最内副枝(offsetZ 0.3)の基部は中心六角柱内に埋まるが「接合部は埋め込み」の
+ * 既存流儀による意図的なもの(先端は中心外)。
+ */
+export const FERNLIKE_ARM_PARAMS: DendriteArmOptions = {
+  sideCount: 5,
+  sideSpacing: 0.3,
+  sideStart: 1.0,
+  sideLength: 0.75,
+  sideWidth: 0.22,
+};
+
+/**
+ * 長柱(N1e)の寸法(案 M 設計書 §3.2・裁量 4 = 案 1)。H/D = 4.0 —
+ * 全高を針・さや族(2.0)と揃え、角柱(H/D 1.875)との差を一目で立たせる。
+ * 目視ラウンドで案 2(R 0.3 / H 2.7)・案 3(R 0.2 / H 2.2)へ差し替え可能なよう
+ * 名前付き定数とする。確定は CP-M2 目視判定。
+ */
+export const LONG_COLUMN_DIMS = { radius: 0.25, height: 2.0 } as const;
+
+/**
+ * 樹枝状族(星状・羊歯)の共通ビルド: 中心六角柱(0.5/0.2)+ 腕 6 本(60° 間隔)。
+ * '樹枝状' case は出力ビット不変の基準(設計書 §3.1)のため本ヘルパーへ寄せず無変更。
+ */
+function buildDendriteFamily(opts: DendriteArmOptions): THREE.Group {
+  const group = new THREE.Group();
+
+  const centerGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.2, 6);
+  const centerMat = new THREE.MeshStandardMaterial({ color: COLORS.base });
+  group.add(new THREE.Mesh(centerGeo, centerMat));
+
+  for (let i = 0; i < 6; i++) {
+    const angle = (i * Math.PI) / 3; // 60度間隔(樹枝状と同じ a 軸整合)
+    group.add(createBranchWithChildren(angle, opts));
+  }
+  return group;
+}
 
 /**
  * 花形断面(dentedHexOutline)の採用寸法(設計書 §2.1 目安 → CP-B3 で実測比較し確定)。
@@ -56,6 +104,28 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
       const mesh = new THREE.Mesh(geo, baseMat);
 
       // 🔷 角の線を追加（青線）
+      const edgeMat = new THREE.LineBasicMaterial({ color: COLORS.edge });
+      const edges = new THREE.EdgesGeometry(geo);
+      const edgeLines = new THREE.LineSegments(edges, edgeMat);
+
+      const group = new THREE.Group();
+      group.add(mesh);
+      group.add(edgeLines);
+      return group;
+    }
+
+    case '長柱': {
+      // 長柱(ML66 N1e、Shimizu)— 角柱の寸法族(案 M 設計書 §3.2)。
+      // 構成は角柱と同一: CylinderGeometry(…, 6) + EdgesGeometry
+      const geo = new THREE.CylinderGeometry(
+        LONG_COLUMN_DIMS.radius,
+        LONG_COLUMN_DIMS.radius,
+        LONG_COLUMN_DIMS.height,
+        6,
+      );
+      const baseMat = new THREE.MeshStandardMaterial({ color: COLORS.base, flatShading: true });
+      const mesh = new THREE.Mesh(geo, baseMat);
+
       const edgeMat = new THREE.LineBasicMaterial({ color: COLORS.edge });
       const edges = new THREE.EdgesGeometry(geo);
       const edgeLines = new THREE.LineSegments(edges, edgeMat);
@@ -162,6 +232,16 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
         group.add(branch);
       }
       return group;
+    }
+
+    case '星状': {
+      // 星状(ML66 P1d、stellar crystal)— 樹枝状のパラメタ族: 副枝なし(§3.1)
+      return buildDendriteFamily(STELLAR_ARM_PARAMS);
+    }
+
+    case '羊歯': {
+      // 羊歯(ML66 P1f、fernlike crystal)— 樹枝状のパラメタ族: 副枝を密・長めに(§3.1)
+      return buildDendriteFamily(FERNLIKE_ARM_PARAMS);
     }
 
     case '針': {
