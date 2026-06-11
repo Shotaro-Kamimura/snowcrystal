@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { ML66 } from '../diagram/ml66';
+import { provisionalSuffix } from '../diagram/provisional';
 import { REGION_CLASS } from './regionClasses';
 import { COMPOSITE_TABLE } from './composites';
 import { classifyGrowthPath } from './classifyGrowthPath';
-import type { GrowthPath, RegionClass } from './types';
+import type { CompositeMorphology, GrowthPath, RegionClass } from './types';
 
 const path = (a: [number, number], b: [number, number]): GrowthPath => [
   { temperature: a[0], supersaturation: a[1] },
@@ -18,17 +19,35 @@ describe('REGION_CLASS(設計書 §7-1)', () => {
   });
 });
 
-describe('COMPOSITE_TABLE スキーマ(設計書 §7)', () => {
-  it('b. id 一意・from/to が RegionClass 値・morphology は 冠柱 か null', () => {
+describe('COMPOSITE_TABLE スキーマ(設計書 §7・案 K 設計書 §10.3)', () => {
+  it('b. id 一意・from/to が RegionClass 値・morphology は CompositeMorphology か null・labelEn 非空', () => {
     const classes: RegionClass[] = ['needle-column', 'plate', 'branched', 'polycrystal'];
+    const morphologies: (CompositeMorphology | null)[] = ['冠柱', '角板付枝', '枝付角板', null];
     const ids = COMPOSITE_TABLE.map((e) => e.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(COMPOSITE_TABLE).toHaveLength(6);
     for (const e of COMPOSITE_TABLE) {
       expect(classes).toContain(e.from);
       expect(classes).toContain(e.to);
-      expect(e.morphology === '冠柱' || e.morphology === null, e.id).toBe(true);
+      expect(morphologies, e.id).toContain(e.morphology);
+      expect(e.labelEn.length, e.id).toBeGreaterThan(0);
     }
+  });
+
+  it('b2. P2 系 2 行: morphology 非 null・provisional 接頭辞(§10.3〜10.4)・CP1a 行は不変', () => {
+    const plateEnds = COMPOSITE_TABLE.find((e) => e.id === 'composite/P2-plate-ends');
+    const branchedEnds = COMPOSITE_TABLE.find((e) => e.id === 'composite/P2-branched-ends');
+    expect(plateEnds?.morphology).toBe('角板付枝');
+    expect(branchedEnds?.morphology).toBe('枝付角板');
+    for (const e of [plateEnds, branchedEnds]) {
+      // 形状解釈系 suffix(「カテゴリ語+補足」の語順 — K5 文法昇格への後方互換、§10.5)
+      expect(provisionalSuffix(e!.source)).toBe('形状解釈(終端要素・確認(6)(7)待ち)— ML66 §3.4');
+      expect(e!.fidelity).toBe('approx'); // 据え置き(§10.4)
+      expect(e!.confidence).toBe('high'); // 据え置き — 確認 (7) の対象
+    }
+    const cp1a = COMPOSITE_TABLE.find((e) => e.id === 'composite/CP1a');
+    expect(provisionalSuffix(cp1a!.source)).toBeNull(); // 冠柱行は触らない(§10.4)
+    expect(cp1a!.labelEn).toBe('Column with plates'); // playground ハードコードの移設(§10.3)
   });
 });
 

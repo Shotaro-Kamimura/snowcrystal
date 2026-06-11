@@ -9,6 +9,7 @@ export const COMPOSITE_TABLE: readonly CompositeEntry[] = [
     id: 'composite/CP1a',
     mlCode: 'CP1a',
     labelJa: '冠柱',
+    labelEn: 'Column with plates', // ML66 Table 1(playground ハードコードの解消 — §10.3)
     from: 'needle-column',
     to: 'plate',
     morphology: '冠柱',
@@ -20,6 +21,7 @@ export const COMPOSITE_TABLE: readonly CompositeEntry[] = [
     id: 'composite/CP1b',
     mlCode: 'CP1b',
     labelJa: '樹枝付柱',
+    labelEn: 'Column with dendrites', // ML66 Table 1
     from: 'needle-column',
     to: 'branched',
     morphology: null,
@@ -31,28 +33,31 @@ export const COMPOSITE_TABLE: readonly CompositeEntry[] = [
     id: 'composite/P2-plate-ends',
     mlCode: 'P2a/P2c',
     labelJa: '角板付六花・樹枝',
+    labelEn: 'Stellar/dendritic crystal with plates at ends', // ML66 Table 1 の P2a/P2c 併記(§10.1)
     from: 'branched',
     to: 'plate',
-    morphology: null,
+    morphology: '角板付枝',
     fidelity: 'approx',
-    source: 'ML66 §3.4',
-    confidence: 'high',
+    source: 'provisional: 形状解釈(終端要素・確認(6)(7)待ち)— ML66 §3.4',
+    confidence: 'high', // 対応表の確度(形状解釈の仮とは独立 — §2.1。確認 (7) の対象)
   },
   {
     id: 'composite/P2-branched-ends',
     mlCode: 'P2f/P2g',
     labelJa: '扇・樹枝付角板',
+    labelEn: 'Plate with sectorlike/dendritic extensions', // ML66 Table 1 の P2f/P2g 併記(§10.1)
     from: 'plate',
     to: 'branched',
-    morphology: null,
+    morphology: '枝付角板',
     fidelity: 'approx',
-    source: 'ML66 §3.4',
-    confidence: 'high',
+    source: 'provisional: 形状解釈(終端要素・確認(6)(7)待ち)— ML66 §3.4',
+    confidence: 'high', // 同上(§2.1)
   },
   {
     id: 'composite/CP3-from-plate',
     mlCode: 'CP3',
     labelJa: '針・柱付板状',
+    labelEn: 'Plate-form crystal with needles/columns', // labelJa と同 generic(CP3a/b 併合)
     from: 'plate',
     to: 'needle-column',
     morphology: null,
@@ -64,6 +69,7 @@ export const COMPOSITE_TABLE: readonly CompositeEntry[] = [
     id: 'composite/CP3-from-branched',
     mlCode: 'CP3',
     labelJa: '針・柱付板状',
+    labelEn: 'Plate-form crystal with needles/columns', // 同上
     from: 'branched',
     to: 'needle-column',
     morphology: null,

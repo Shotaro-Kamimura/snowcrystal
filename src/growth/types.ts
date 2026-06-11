@@ -21,13 +21,16 @@ export type RegionClass = 'needle-column' | 'plate' | 'branched' | 'polycrystal'
 /**
  * 複合型専用の形態キー。Morphology union には追加しない
  * (0.2.0 凍結中に公開 union の変更を積まないため。統合は 0.3.0 で判断)。
+ * '角板付枝'(P2a/P2c)・'枝付角板'(P2f/P2g)は終端要素コンポジット
+ * (案 K 設計書 §10。'枝付角板' は P2f 扇付を包含する generic — §10.3)。
  */
-export type CompositeMorphology = '冠柱';
+export type CompositeMorphology = '冠柱' | '角板付枝' | '枝付角板';
 
 export interface CompositeEntry {
   id: string; // 'composite/CP1a'
   mlCode: MlCode; // 'CP1a'
   labelJa: string; // '冠柱'
+  labelEn: string; // 'Column with plates'(ML66 Table 1 系の英名 — 単一情報源、§10.3)
   from: RegionClass;
   to: RegionClass;
   morphology: CompositeMorphology | null; // 専用ジオメトリあり | null = 分類のみ

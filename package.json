@@ -51,6 +51,7 @@
   },
   "devDependencies": {
     "@microsoft/api-extractor": "^7.43.0",
+    "@types/node": "^25.9.3",
     "@types/three": "^0.160.0",
     "three": "^0.160.0",
     "typescript": "^5.4.0",

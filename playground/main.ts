@@ -246,19 +246,27 @@ function buildCrystal(params: Parameters<typeof createSnowCrystal>[0]): THREE.Gr
 }
 
 /**
- * 冠柱(CP1a)のみ userData.part で柱 = ①色 / キャップ = ②色に上書きする
- * (マテリアルは CP-P3-2 で Mesh ごとに個別インスタンス化済み)。
+ * 複合描画(composite.morphology 非 null)の userData.part をステージ色で塗り分ける
+ * (案 K 設計書 §10.7: part → ステージ色 map。冠柱の 'column' | 'cap' は改名せず
+ * map で吸収し、P2 系の 'core' | 'tip' と併記する。① = column/core / ② = cap/tip)。
+ * マテリアルは Mesh ごとに個別インスタンス(CP-P3-2)。角板系中核のマテリアル
+ * 配列([side, top, top])にも対応する。
  * 委譲描画(複合なし・classification-only)は無着色 = 既定マテリアルのまま。
  */
+const PART_STAGE: Record<string, 0 | 1> = { column: 0, core: 0, cap: 1, tip: 1 };
+
 function paintGrowthParts(group: THREE.Group): void {
   const hit = group.userData.pathHit as PathHit;
-  if (hit.composite?.morphology !== '冠柱') return;
+  if (!hit.composite?.morphology) return;
   group.traverse((obj) => {
     if (!(obj instanceof THREE.Mesh)) return;
-    const part = obj.userData.part as 'column' | 'cap' | undefined;
-    if (!part) return;
-    const material = obj.material as THREE.MeshStandardMaterial;
-    material.color.set(part === 'column' ? STAGE_COLORS[0] : STAGE_COLORS[1]);
+    const part = obj.userData.part as string | undefined;
+    const stage = part === undefined ? undefined : PART_STAGE[part];
+    if (stage === undefined) return;
+    const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+    for (const material of materials) {
+      (material as THREE.MeshStandardMaterial).color.set(STAGE_COLORS[stage]);
+    }
   });
 }
 
@@ -721,14 +729,16 @@ function updatePathInfo(): void {
   pathCompositeEl.textContent = !c
     ? '複合型: —'
     : c.morphology
-      ? `複合型: ${c.labelJa} (${c.mlCode}) — ${c.source}`
+      ? // 仮実装の信号はバッジが担い、本文行は suffix(何が仮か+出典)のみ(裁量 8-8)
+        `複合型: ${c.labelJa} (${c.mlCode}) — ${provisionalSuffix(c.source) ?? c.source}`
       : `複合型: ${c.labelJa} (${c.mlCode})（専用描画なし — 最終条件の形態で表示）`;
 
-  // 大見出しは「描画中の 3D」を表す: 冠柱は専用表記、委譲時は最終(または唯一)
-  // ステージの形態。点が未設置の間は直前の表示を保持(3D も直前のまま)。
-  if (c?.morphology === '冠柱') {
+  // 大見出しは「描画中の 3D」を表す: 専用描画の複合(morphology 非 null)は
+  // 専用表記、委譲時は最終(または唯一)ステージの形態。点が未設置の間は
+  // 直前の表示を保持(3D も直前のまま)。(冠柱固定 → 非 null 一般化、§10.7)
+  if (c?.morphology) {
     morphJa.textContent = c.labelJa;
-    morphEn.textContent = 'Column with plates'; // ML66 Table 1 の英名
+    morphEn.textContent = c.labelEn; // 単一情報源 = CompositeEntry.labelEn(§10.3)
     globalCode.textContent = c.mlCode;
     renderHierarchy([]); // CP 系の系統表示データは 3a では持たない
     renderProvBadge(provisionalSuffix(c.source)); // CompositeEntry.source も同じ規約(案 K §2.2)
