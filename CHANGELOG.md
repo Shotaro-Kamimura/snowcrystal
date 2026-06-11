@@ -54,6 +54,27 @@ branch is merged after the 0.2.0 release. The 0.2.0 section below stays frozen.
   「複合型: —」. Growth imports are deep imports from `src/growth/`,
   header-commented as 3a-temporary (public surface in 0.3.0).
 
+### Changed
+- **BREAKING (planned for 0.3.0)**: the `Morphology` union expanded with
+  '星状' (stellar crystal), '羊歯' (fernlike crystal), and '長柱' (long solid
+  column) — consumer code with exhaustive switches over `Morphology` must be
+  updated (same shape as the 0.2.0 '砲弾集合' / '側面' expansion).
+
+### Added
+- Dedicated geometries for the three ML66 regions previously rendered by
+  approximation (case M, 760ddeb): the P1d stellar region (was dendrite),
+  the P1f fernlike region (was dendrite), and the N1e long-column region
+  (was column) are reassigned to the new morphologies with fidelity
+  approx → exact. Stellar and fernlike are a dendrite-arm parameter
+  family — `DENDRITE_ARM_DEFAULTS` pins the current dendrite values
+  (stellar = no side branches; fernlike = 5 dense, longer side pairs) —
+  and the long column is a column dimension family (R 0.25 / H 2.0,
+  aspect 4.0 vs the column's 1.875). All 11 pre-existing morphologies
+  are bit-identical: full-mesh MD5 signatures (vertices + indices +
+  world matrices, 11 morphologies × 2 seeds) match before/after, also
+  reproduced cross-machine on Linux. Their global-classification codes
+  stay unassigned pending expert item (4).
+
 ### Fixed
 - Skeletal column (骸晶角柱), sheath (さや), and needle (針) rebuilt on
   {10-10}-consistent dented-hex ("flower") cross-section extrusions,
