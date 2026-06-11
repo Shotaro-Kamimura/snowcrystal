@@ -6,7 +6,35 @@ import {
   createBranchWithChildren,
   createBulletRosette,
   createSidePlanes,
+  extrudePrism,
+  outlineToShape,
 } from './parts';
+import { dentedHexOutline } from './hexOutlineBuilder';
+
+/**
+ * 花形断面(dentedHexOutline)の採用寸法(設計書 §2.1 目安 → CP-B3 で実測比較し確定)。
+ * - skeletal(骸晶角柱): 目安どおり m 0.16 / w 0.08。溝深さ g = (√3/2)·w ≈ 0.069 は
+ *   apothem(≈ 0.346)の 20%。v1 の側面凹み Box は外面が apothem より突出した擬似表現
+ *   (幾何学的な深さの踏襲元なし)のため、外形包絡 R のみ厳密維持し深さは目安値を採用。
+ * - sheath(さや・針の中心柱): 薄肉。溝の辺方向占有幅 m + w = 0.15 が v1 エッジ Box の
+ *   厚み 0.15 と一致し、置換前後で側面の視覚周期を保つ。g ≈ 0.043(apothem の 12.5%)。
+ * テストから参照する内部 export(src/index.ts には追加しない)。
+ */
+export const DENT_DIMS = {
+  skeletal: { m: 0.16, w: 0.08 },
+  sheath: { m: 0.1, w: 0.05 },
+} as const;
+
+/**
+ * 花形断面を c 軸(+Y)方向へ高さ height で押し出した柱ジオメトリ(厚み中心 y = 0)。
+ * extrudePrism は +Z 押し出しのため rotateX(90°) で立てる(断面方位は保存:
+ * アウトラインの atan2(y, x) がそのまま柱の atan2(z, x) になる)。
+ */
+function dentedHexColumn(R: number, m: number, w: number, height: number): THREE.ExtrudeGeometry {
+  const geo = extrudePrism(dentedHexOutline(R, m, w), height);
+  geo.rotateX(Math.PI / 2);
+  return geo;
+}
 
 /**
  * Build the THREE.Group for a single morphology.
@@ -143,8 +171,9 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
       const layers = 6;
 
       let topRadius = 0;
+      // 旧エッジ Box の厚み。Box は花形断面へ置換済みだが、針の半径(/√3)と
+      // 配置半径(topRadius + 0.15)の基準値として数値を維持する(§2.4 見た目踏襲)
       const edgeThickness = 0.15;
-      const edgeLength = 0.55;
       let edgeHeight = 0;
 
       for (let i = 0; i < layers; i++) {
@@ -160,7 +189,12 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
           opacity: i === 0 ? 1.0 : 0.3,
         });
 
-        const geo = new THREE.CylinderGeometry(r, r, height, 6, 1, i !== layers - 1);
+        // 中心柱(i = 0): 花形断面(薄肉、さやと同パラメタ)の押し出し —
+        // 旧 六角柱 + エッジ Box 6 本を置換(設計書 §2.4)。i ≥ 1 の透明レイヤーは踏襲
+        const geo: THREE.BufferGeometry =
+          i === 0
+            ? dentedHexColumn(r, DENT_DIMS.sheath.m, DENT_DIMS.sheath.w, height)
+            : new THREE.CylinderGeometry(r, r, height, 6, 1, i !== layers - 1);
         const mesh = new THREE.Mesh(geo, mat);
         group.add(mesh);
 
@@ -173,32 +207,26 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
 
         if (i === 0) {
           topRadius = r;
-          edgeHeight = height + 0.001;
-
-          const edgeGroup = new THREE.Group();
-          for (let j = 0; j < 6; j++) {
-            const angle = (Math.PI / 3) * j;
-            const x = topRadius * Math.cos(angle);
-            const z = topRadius * Math.sin(angle);
-
-            const boxGeo = new THREE.BoxGeometry(edgeLength, edgeHeight, edgeThickness);
-            const boxMat = new THREE.MeshStandardMaterial({ color: COLORS.base });
-            const edgeBox = new THREE.Mesh(boxGeo, boxMat);
-
-            edgeBox.position.set(x, 0, z);
-            edgeBox.rotation.y = -angle + Math.PI / 2;
-            edgeGroup.add(edgeBox);
-          }
-          group.add(edgeGroup);
+          edgeHeight = height + 0.001; // 旧エッジ Box の高さ(+0.001)。針の Y 配置基準として維持
         }
       }
 
       // 🧩 針の配置（六角柱の角に完全接続）
       const needleMaterial = new THREE.MeshStandardMaterial({ color: COLORS.wing });
-      const needleRadius = edgeThickness / Math.sqrt(3); // ✅ 六角柱角と合うサイズ
+      // 旧エッジ Box(厚み 0.15)の角に内接する六角柱半径として 0.15/√3 ≈ 0.0866 と
+      // 導出された値。Box 置換後も見た目踏襲のため数値を維持(花形断面の w とは独立、§2.4)
+      const needleRadius = edgeThickness / Math.sqrt(3);
+
+      // Θ0 = 30°(π/6): CylinderGeometry(…,6) のローカル頂点方位の較正定数。
+      // 頂点座標からの機械確定: 上面リング 6 頂点の atan2(z, x) = ±30°, ±90°, ±150°
+      // ≡ 30° (mod 60°)。rotation.y = ρ は方位を −ρ シフトするため、
+      // rotation.y = −φ_i + Θ0 で頂点 1 本が radial 方向 φ_i に一致する(設計書 §2.4)。
+      // φ_i = 30° + i·60° では −φ_i + Θ0 = −i·60° ≡ 0 (mod 60°) となり、
+      // 6 回対称により針本体は v1(rotation.y = 0)と同一形状
+      const THETA0 = Math.PI / 6;
 
       for (let i = 0; i < 6; i++) {
-        const angle = (i * Math.PI) / 3 + Math.PI / 6; // ← 六角柱の角方向に修正
+        const angle = (i * Math.PI) / 3 + Math.PI / 6; // φ_i = 六角柱の角方向
         const baseX = topRadius + edgeThickness; // ←厚みを考慮
         const x = baseX * Math.cos(angle) - needleRadius * Math.cos(angle);
         const z = baseX * Math.sin(angle) - needleRadius * Math.sin(angle);
@@ -209,18 +237,18 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
         const topY = baseHeight / 4.5 + edgeHeight / 4.5;
         const bottomY = -baseHeight / 4.5 - edgeHeight / 4.5;
 
-        // 上向き針
+        // 上向き針(rotation.y はファセット方位の明示整合 — Θ0 コメント参照)
         const geo1 = new THREE.CylinderGeometry(needleRadius, needleRadius, lengthTop, 6);
         const mesh1 = new THREE.Mesh(geo1, needleMaterial);
         mesh1.position.set(x, topY + lengthTop / 2, z);
-        mesh1.rotation.y = 0;
+        mesh1.rotation.y = -angle + THETA0;
         group.add(mesh1);
 
         // 下向き針
         const geo2 = new THREE.CylinderGeometry(needleRadius, needleRadius, lengthBottom, 6);
         const mesh2 = new THREE.Mesh(geo2, needleMaterial);
         mesh2.position.set(x, bottomY - lengthBottom / 2, z);
-        mesh2.rotation.y = 0;
+        mesh2.rotation.y = -angle + THETA0;
         group.add(mesh2);
       }
       return group;
@@ -292,92 +320,64 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
     case '骸晶角柱': {
       const group = new THREE.Group();
       const baseRadius = 0.4; // 六角柱の半径
-      const baseHeight = 1.5; // 六角柱の高さ
+      const baseHeight = 1.5; // 六角柱の高さ(全高は 2 段組でも不変)
+      // 端面の窪み深さ = リップ高さ(v1 の dentDepth 0.15 を踏襲)。
+      // v1 の「端面の凹み」は Box 骨格の +0.2 はみ出しが作る縁の錯視で、沈め六角柱は
+      // 閉キャップ内部に埋没し不可視だった — 実ジオメトリの窪み端面へ置換する
+      // (骸晶角柱の定義的特徴 = 中空端面。2026-06-11 チャット判定・修正ラウンド 2)
+      const lip = 0.15;
 
-      // ✅ メインの六角柱（外側）
-      const outerGeo = new THREE.CylinderGeometry(baseRadius, baseRadius, baseHeight, 6);
-      const outerMat = new THREE.MeshStandardMaterial({ color: COLORS.base, flatShading: true });
-      const outerMesh = new THREE.Mesh(outerGeo, outerMat);
-      group.add(outerMesh);
+      const edgeLineMat = new THREE.LineBasicMaterial({ color: COLORS.edge });
+      const sideMat = new THREE.MeshStandardMaterial({ color: COLORS.base, flatShading: true });
 
-      // ✅ 外側の角線（エッジライン）
-      const outerEdges = new THREE.EdgesGeometry(outerGeo);
-      group.add(new THREE.LineSegments(outerEdges, new THREE.LineBasicMaterial({ color: COLORS.edge })));
-
-      // ✅ 各面に沿った四角柱の骨格構造（6方向に配置）
-      const edgeGroup = new THREE.Group();
-      const edgeLength = 0.55;
-      const edgeThickness = 0.15;
-      const edgeHeight = baseHeight + 0.2; // ここが深さ調整
-
-      for (let j = 0; j < 6; j++) {
-        const angle = (Math.PI / 3) * j;
-        const x = baseRadius * Math.cos(angle);
-        const z = baseRadius * Math.sin(angle);
-        const boxGeo = new THREE.BoxGeometry(edgeLength, edgeHeight, edgeThickness);
-        const boxMat = new THREE.MeshStandardMaterial({ color: COLORS.base });
-        const edgeBox = new THREE.Mesh(boxGeo, boxMat);
-        edgeBox.position.set(x, 0, z);
-        edgeBox.rotation.y = -angle + Math.PI / 2; // 各面に接するように回転
-        edgeGroup.add(edgeBox);
-      }
-      group.add(edgeGroup);
-
-      // ✅ 中央の六角形の「凹み」部分を深く沈めるメッシュを追加（上下面に）
-      const dentRadius = baseRadius * 0.7; // 中心の凹みの半径（少し小さめ）
-      const dentHeight = 0.2; // 非常に薄い高さ（凹みの厚み）
-      const dentDepth = 0.15; // 凹ませる深さ（通常より深くする）
-
-      const dentMat = new THREE.MeshStandardMaterial({
-        color: COLORS.highlight, // ハイライトカラーで視認性アップ
+      // コア: 花形断面(辺中央凹み)の押し出し(高さ H − 2·lip、中央配置)。
+      // 旧 Box 骨格 6 本 + 側面凹み Box 6 枚(+ 水色エッジ線)の置換(設計書 §2.2)。
+      // キャップ(index 0)= 窪みの床。ハイライト色で v1 の沈め六角柱の意匠を踏襲
+      const coreGeo = dentedHexColumn(
+        baseRadius,
+        DENT_DIMS.skeletal.m,
+        DENT_DIMS.skeletal.w,
+        baseHeight - 2 * lip,
+      );
+      const floorMat = new THREE.MeshStandardMaterial({
+        color: COLORS.highlight,
         flatShading: true,
       });
+      group.add(new THREE.Mesh(coreGeo, [floorMat, sideMat]));
+      group.add(new THREE.LineSegments(new THREE.EdgesGeometry(coreGeo), edgeLineMat));
 
-      // 上面の凹み
-      const topDent = new THREE.Mesh(
-        new THREE.CylinderGeometry(dentRadius, dentRadius, dentHeight, 6),
-        dentMat,
+      // リップリング ×2: 外形 = 同花形断面(凹み溝は全高で連続)/ 穴 = 六角形。
+      // 穴は円半径 0.28(= v1 dentRadius 0.4×0.7)・頂点を角方向(0° + k·60°)に配置。
+      // 穴の apothem 0.28·cos30° ≈ 0.243 < 凹み床の中心距離 apothem − g ≈ 0.277 で
+      // 凹み溝と干渉せず、角方向の壁厚は 0.4 − 0.28 = 0.12
+      const holeRadius = 0.28;
+      const ringShape = outlineToShape(
+        dentedHexOutline(baseRadius, DENT_DIMS.skeletal.m, DENT_DIMS.skeletal.w),
       );
-      topDent.position.y = baseHeight / 2 - dentHeight / 2 - dentDepth;
-      group.add(topDent);
+      const hole = new THREE.Path();
+      for (let k = 0; k < 6; k++) {
+        const a = -(Math.PI / 3) * k; // CW(THREE.Shape の穴の向き規約)
+        const hx = holeRadius * Math.cos(a);
+        const hy = holeRadius * Math.sin(a);
+        if (k === 0) hole.moveTo(hx, hy);
+        else hole.lineTo(hx, hy);
+      }
+      hole.closePath();
+      ringShape.holes.push(hole);
 
-      // 下面の凹み（反転）
-      const bottomDent = topDent.clone();
-      bottomDent.position.y = -baseHeight / 2 + dentHeight / 2 + dentDepth;
-      group.add(bottomDent);
+      const ringGeo = new THREE.ExtrudeGeometry(ringShape, { depth: lip, bevelEnabled: false });
+      ringGeo.translate(0, 0, -lip / 2); // 厚み中心合わせ(extrudePrism と同イディオム)
+      ringGeo.rotateX(Math.PI / 2); // c 軸 +Y へ(dentedHexColumn と同じ向き規約)
 
-      // ✅ 側面の凹み（Boxを貼り付け、Edgesで視認可能にする）
-      const sideDentGroup = new THREE.Group();
-      const dentW = 0.55; // 横幅（六角柱1辺の長さ）
-      const dentH = 0.4; // 高さ（縦）
-      const dentD = 0.05; // 厚み（奥行き）
-      const dentInset = 0.02; // 凹ませる距離（少し内側へ）
-
-      for (let j = 0; j < 6; j++) {
-        const angle = (Math.PI / 3) * j;
-
-        // 内側に沈めた位置
-        const x = (baseRadius - dentD / 2 - dentInset) * Math.cos(angle);
-        const z = (baseRadius - dentD / 2 - dentInset) * Math.sin(angle);
-
-        // ジオメトリとメッシュ
-        const dentGeo = new THREE.BoxGeometry(dentD, dentH, dentW);
-        const dentMesh = new THREE.Mesh(dentGeo, dentMat);
-        dentMesh.position.set(x, 0, z);
-        dentMesh.rotation.y = -angle;
-
-        // ✅ エッジライン追加（明るい色で輪郭を見せる）
-        const edgeGeo = new THREE.EdgesGeometry(dentGeo);
-        const edgeMat = new THREE.LineBasicMaterial({ color: 0x88ccff }); // 明るめの水色
-        const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
-        edgeLines.rotation.y = -angle;
-        edgeLines.position.set(x, 0, z);
-
-        sideDentGroup.add(dentMesh);
-        sideDentGroup.add(edgeLines);
+      for (const sign of [1, -1]) {
+        const ring = new THREE.Mesh(ringGeo, sideMat);
+        ring.position.y = (sign * (baseHeight - lip)) / 2; // 上下端: y ∈ ±[H/2 − lip, H/2]
+        group.add(ring);
+        const ringLines = new THREE.LineSegments(new THREE.EdgesGeometry(ringGeo), edgeLineMat);
+        ringLines.position.y = ring.position.y;
+        group.add(ringLines);
       }
 
-      group.add(sideDentGroup);
       return group;
     }
 
@@ -400,7 +400,12 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
           opacity: i === 0 ? 1.0 : 0.3,
         });
 
-        const geo = new THREE.CylinderGeometry(r, r, height, 6, 1, i !== layers - 1);
+        // 最外層: 花形断面(薄肉)の押し出し — 旧 六角柱 + エッジ Box 6 本を置換
+        // (設計書 §2.3。縦溝の意匠は 240° 凹角の彫り込みで表現)。内側 5 重は踏襲
+        const geo: THREE.BufferGeometry =
+          i === 0
+            ? dentedHexColumn(r, DENT_DIMS.sheath.m, DENT_DIMS.sheath.w, height)
+            : new THREE.CylinderGeometry(r, r, height, 6, 1, i !== layers - 1);
         const mesh = new THREE.Mesh(geo, mat);
         group.add(mesh);
 
@@ -410,32 +415,6 @@ export function buildMorphology(morphology: Morphology, rng: () => number): THRE
           new THREE.LineBasicMaterial({ color: COLORS.edge }),
         );
         group.add(edgeLines);
-
-        // ✅ 最外層の六角柱に沿って立体的な辺（エッジ）を追加
-        if (i === 0) {
-          const edgeGroup = new THREE.Group();
-          const edgeRadius = r;
-          const edgeLength = 0.55; // 六角柱の一辺の長さ
-          const edgeThickness = 0.15;
-          const edgeHeight = height + 0.001;
-
-          for (let j = 0; j < 6; j++) {
-            const angle = (Math.PI / 3) * j;
-            const x = edgeRadius * Math.cos(angle);
-            const z = edgeRadius * Math.sin(angle);
-
-            const boxGeo = new THREE.BoxGeometry(edgeLength, edgeHeight, edgeThickness);
-            const boxMat = new THREE.MeshStandardMaterial({ color: COLORS.base });
-            const edgeBox = new THREE.Mesh(boxGeo, boxMat);
-
-            edgeBox.position.set(x, 0, z);
-            edgeBox.rotation.y = -angle + Math.PI / 2;
-
-            edgeGroup.add(edgeBox);
-          }
-
-          group.add(edgeGroup);
-        }
       }
       return group;
     }
